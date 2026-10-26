@@ -15,6 +15,10 @@
  *   - v0.4.1 (2026-10-24): Tambah makro versi firmware FW_VERSION_STR & tanggal rilis.
  *   - v0.4.2 (2026-10-25): Default GPS_BAUD_RATE 230400 baud untuk biner u-blox UBX-NAV-PVT M10.
  *   - v0.4.3 (2026-10-25): Tambah konfigurasi PIN_BEEPER pada GP15 (RP2040-Zero).
+ *   - v0.5.0 (2026-10-26): Migrasi pinout resmi "VANIFLIGHT V 1.0" Custom PCB (RP2040-Zero
+ *                          + ESP32-C3), dukungan Twin-Motor Dual ESC (S1/S2) & Differential
+ *                          Thrust untuk Tailsitter/Twin Motor, elevon pada S3 (GP3) & S4 (GP2),
+ *                          dan persiapan link telemetri PIO UART untuk ESP32-C3.
  * ============================================================================
  */
 #ifndef CONFIG_H
@@ -22,9 +26,9 @@
 
 #include <Arduino.h>
 
-// [Since v0.4.1 - 2026-10-24] Identitas Versi Firmware Resmi
-#define FW_VERSION_STR        "v0.4.3"
-#define FW_RELEASE_DATE       "2026-10-25"
+// [Since v0.5.0 - 2026-10-26] Identitas Versi Firmware Resmi
+#define FW_VERSION_STR        "v0.5.0"
+#define FW_RELEASE_DATE       "2026-10-26"
 
 // ============================================================================
 // 1. PILIH JENIS RECEIVER RC YANG DIGUNAKAN
@@ -49,30 +53,46 @@
     #undef BOARD_NAME
   #endif
   #define BOARD_NAME "RP2040-Zero (Waveshare)"
-  // Pin I2C0 untuk Sensor IMU (MPU6050 / MPU6500) -> Pin pinggir di RP2040-Zero & Pico
-  #define PIN_I2C_SDA         4   // GP4
-  #define PIN_I2C_SCL         5   // GP5
-  // Pin Output Servo Elevon & ESC Motor Brushless -> Pin pinggir di RP2040-Zero
-  #define PIN_SERVO_LEFT      6   // GP6 -> Servo Sayap Kiri
-  #define PIN_SERVO_RIGHT     7   // GP7 -> Servo Sayap Kanan
-  #define PIN_MOTOR_ESC       14  // GP14 -> Sinyal ESC Motor Brushless
-  // Pin Input Receiver PWM (Jika pakai RC_PROTO_PWM)
-  #define PIN_PWM_CH1_ROLL    2   // GP2
-  #define PIN_PWM_CH2_PITCH   3   // GP3
-  #define PIN_PWM_CH3_THR     6   // GP6
-  #define PIN_PWM_CH4_ARM     7   // GP7
-  #define PIN_PWM_CH5_MODE    13  // GP13
-  // Pin Beeper / Buzzer Indikator (GP15, tepat di sebelah GP14 ESC)
-  #define PIN_BEEPER          15  // GP15 -> Kaki (+) Buzzer (Kaki (-) ke GND)
-  // Pin UART0 Receiver (Serial1: GP0 = TX, GP1 = RX)
-  #define PIN_RC_UART_TX      0   // GP0
-  #define PIN_RC_UART_RX      1   // GP1
+  // ============================================================================
+  // PINOUT RESMI "VANIFLIGHT V 1.0" CUSTOM PCB (RP2040-Zero + ESP32-C3)
+  // ============================================================================
+  // Port Bus I2C0 untuk Sensor IMU (MPU6050) & Barometer (BMP280)
+  #define PIN_I2C_SDA         4   // GP4 (I2C0 SDA)
+  #define PIN_I2C_SCL         5   // GP5 (I2C0 SCL)
+
+  // Port Output 8-Channel Header S1 s/d S8 (50 Hz Hardware PWM)
+  #define PIN_MOTOR_ESC       14  // GP14 -> Port S1 (Motor Kiri / Main ESC)
+  #define PIN_MOTOR_ESC_RIGHT 13  // GP13 -> Port S2 (Motor Kanan / Twin-Motor Tailsitter)
+  #define PIN_SERVO_LEFT      3   // GP3  -> Port S3 (Servo Sayap Kiri / Elevon L)
+  #define PIN_SERVO_RIGHT     2   // GP2  -> Port S4 (Servo Sayap Kanan / Elevon R)
+  #define PIN_AUX_S5          6   // GP6  -> Port S5 (Aux 1 / Motor 3 / Flap / Pan)
+  #define PIN_AUX_S6          7   // GP7  -> Port S6 (Aux 2 / Motor 4 / Rudder / Tilt)
+  #define PIN_AUX_S7          11  // GP11 -> Port S7 (Aux 3 / Gimbal Pan)
+  #define PIN_AUX_S8          10  // GP10 -> Port S8 (Aux 4 / Gimbal Tilt)
+  #define PIN_AUX_PAD         12  // GP12 -> Pad Solder Cadangan AUX
+
+  // Beeper / Buzzer Aktif Onboard (GP15)
+  #define PIN_BEEPER          15  // GP15 -> Kaki (+) Buzzer Aktif Onboard
+
+  // Port Receiver SBUS Eksternal (Port RX di PCB)
+  #define PIN_RC_UART_TX      0   // GP0 (UART0 TX)
+  #define PIN_RC_UART_RX      1   // GP1 (UART0 RX -> Port RX SBUS di PCB)
   #define RC_SERIAL           Serial1
-  // Pin UART1 untuk GPS RushFPV M10 (Serial2: GP8 = TX, GP9 = RX)
-  #define PIN_GPS_UART_TX     8   // GP8 (Sambung ke RX GPS)
-  #define PIN_GPS_UART_RX     9   // GP9 (Sambung ke TX GPS)
+
+  // Port Link Serial Telemetri ESP32-C3 Super Mini Onboard (ESP-NOW)
+  // CATATAN ARSITEKTUR RP2040:
+  // - UART0 hardware dipakai oleh SBUS Receiver (GP0/GP1).
+  // - UART1 hardware dipakai oleh GPS RushFPV M10 (GP8/GP9).
+  // Komunikasi telemetri dengan ESP32-C3 pada GP28/GP29 diimplementasikan
+  // via SerialPIO (PIO-based UART hardware buffer), bebas dari limitasi port UART0.
+  #define PIN_ESP32_UART_RX   28  // GP28 (Menerima sinyal dari TX ESP32-C3 via SerialPIO)
+  #define PIN_ESP32_UART_TX   29  // GP29 (Mengirim telemetri ke RX ESP32-C3 via SerialPIO)
+
+  // Port GPS RushFPV M10 (Serial2 / UART1)
+  #define PIN_GPS_UART_TX     8   // GP8 (UART1 TX -> Sambung ke RX GPS)
+  #define PIN_GPS_UART_RX     9   // GP9 (UART1 RX -> Sambung ke TX GPS)
   #define GPS_SERIAL          Serial2
-  #define HAS_BAROMETER       1   // Auto-detect BMP280/BME280 pada bus I2C0 (GP4/GP5)
+  #define HAS_BAROMETER       1   // Auto-detect BMP280 pada bus I2C0 (GP4/GP5)
   // LED Indikator (GP25 di Pico standar, GP16 RGB di RP2040-Zero)
   #ifdef PIN_LED
     #define PIN_STATUS_LED    PIN_LED
@@ -273,5 +293,12 @@
 #define MOTOR_IDLE_US         1000    // Flying Wing: motor tetap diam (0%) saat Armed & throttle di bawah
 #define MOTOR_MAX_US          2000    // Gas penuh
 #define ARM_SAFETY_MAX_THR_US 1080    // Throttle harus di bawah nilai ini agar bisa di-Arm
+
+// ============================================================================
+// 6. KONFIGURASI TWIN-MOTOR DIFFERENTIAL THRUST (TAILSITTER / TWIN MOTOR)
+// ============================================================================
+#define ENABLE_DIFF_THRUST    1       // 1 = Aktifkan beda gas motor kiri (S1) & kanan (S2)
+#define DIFF_THRUST_GAIN      0.25f   // Skala respons yaw terhadap perbedaan kecepatan motor (0.1..0.5)
+#define DIFF_THRUST_MAX_US    150     // Perbedaan maksimum sinyal antar kedua motor (+-150 us)
 
 #endif // CONFIG_H

@@ -29,9 +29,12 @@
 #endif
 
 struct ActuatorOutputs {
-  uint16_t servo_left_us  = SERVO_CENTER_US;
-  uint16_t servo_right_us = SERVO_CENTER_US;
-  uint16_t motor_esc_us   = MOTOR_DISARMED_US;
+  uint16_t servo_left_us        = SERVO_CENTER_US;
+  uint16_t servo_right_us       = SERVO_CENTER_US;
+  uint16_t motor_esc_us         = MOTOR_DISARMED_US;  // S1: Motor Kiri / Utama
+#ifdef PIN_MOTOR_ESC_RIGHT
+  uint16_t motor_esc_right_us   = MOTOR_DISARMED_US;  // S2: Motor Kanan (Twin Motor)
+#endif
 };
 
 class ElevonMixer {
@@ -49,26 +52,49 @@ public:
       // Gunakan Hardware PWM Silikon Murni RP2040 (1 MHz tick = 1.0 us, periode 20.000 us = 50 Hz)
       // Bebas 100% dari bug hang/halt PIO Servo.h (jmp !x, 2 + pio_sm_clear_fifos)!
       float clk_div = (float)clock_get_hz(clk_sys) / 1000000.0f;
+    #ifdef PIN_MOTOR_ESC_RIGHT
+      const uint8_t  pins[4]    = { PIN_SERVO_LEFT, PIN_SERVO_RIGHT, PIN_MOTOR_ESC, PIN_MOTOR_ESC_RIGHT };
+      const uint8_t  num_pins   = 4;
+    #else
       const uint8_t  pins[3]    = { PIN_SERVO_LEFT, PIN_SERVO_RIGHT, PIN_MOTOR_ESC };
-      const uint16_t init_us[3] = { SERVO_CENTER_US, SERVO_CENTER_US, MOTOR_DISARMED_US };
+      const uint8_t  num_pins   = 3;
+    #endif
 
-      for (uint8_t i = 0; i < 3; i++) {
+      for (uint8_t i = 0; i < num_pins; i++) {
         uint slice = pwm_gpio_to_slice_num(pins[i]);
         pwm_set_clkdiv(slice, clk_div);
         pwm_set_wrap(slice, 19999); // 20.000 us (50.00 Hz)
       }
-      // Phase-Staggering: Geser fasa pulsa Servo Kanan (GP7 = Slice 3 Chan B) ke ujung periode 20ms
-      // agar lonjakan arus awal (inrush current) Servo 1 dan Servo 2 TIDAK PERNAH berbarengan!
+      // Phase-Staggering: Geser fasa pulsa Servo Kiri (GP3 = Slice 1 Chan B) ke ujung periode 20ms
+      // sementara Servo Kanan (GP2 = Slice 1 Chan A) di awal periode,
+      // agar lonjakan arus awal (inrush current) kedua servo TIDAK PERNAH berbarengan!
       uint slice_srv = pwm_gpio_to_slice_num(PIN_SERVO_LEFT);
       pwm_set_output_polarity(slice_srv, false, true);
 
-      gpio_set_function(PIN_SERVO_LEFT,  GPIO_FUNC_PWM);
-      gpio_set_function(PIN_SERVO_RIGHT, GPIO_FUNC_PWM);
-      gpio_set_function(PIN_MOTOR_ESC,   GPIO_FUNC_PWM);
+      gpio_set_function(PIN_SERVO_LEFT,      GPIO_FUNC_PWM);
+      gpio_set_function(PIN_SERVO_RIGHT,     GPIO_FUNC_PWM);
+      gpio_set_function(PIN_MOTOR_ESC,       GPIO_FUNC_PWM);
+    #ifdef PIN_MOTOR_ESC_RIGHT
+      gpio_set_function(PIN_MOTOR_ESC_RIGHT, GPIO_FUNC_PWM);
+    #endif
 
-      writeOutputs(SERVO_CENTER_US, SERVO_CENTER_US, MOTOR_DISARMED_US);
+      // Inisialisasi port cadangan S5..S8 agar tidak floating
+    #ifdef PIN_AUX_S5
+      gpio_init(PIN_AUX_S5); gpio_set_dir(PIN_AUX_S5, GPIO_OUT); gpio_put(PIN_AUX_S5, 0);
+    #endif
+    #ifdef PIN_AUX_S6
+      gpio_init(PIN_AUX_S6); gpio_set_dir(PIN_AUX_S6, GPIO_OUT); gpio_put(PIN_AUX_S6, 0);
+    #endif
+    #ifdef PIN_AUX_S7
+      gpio_init(PIN_AUX_S7); gpio_set_dir(PIN_AUX_S7, GPIO_OUT); gpio_put(PIN_AUX_S7, 0);
+    #endif
+    #ifdef PIN_AUX_S8
+      gpio_init(PIN_AUX_S8); gpio_set_dir(PIN_AUX_S8, GPIO_OUT); gpio_put(PIN_AUX_S8, 0);
+    #endif
 
-      for (uint8_t i = 0; i < 3; i++) {
+      writeOutputs(SERVO_CENTER_US, SERVO_CENTER_US, MOTOR_DISARMED_US, MOTOR_DISARMED_US);
+
+      for (uint8_t i = 0; i < num_pins; i++) {
         pwm_set_enabled(pwm_gpio_to_slice_num(pins[i]), true);
       }
     #elif defined(ESP32)
@@ -116,26 +142,45 @@ public:
     out.servo_right_us = (uint16_t)((int16_t)out.servo_right_us + diff_r);
 
     // Pengaman & Kontrol Motor Brushless (Arming Lock + Cruise Throttle saat RTH)
+    uint16_t base_thr = MOTOR_DISARMED_US;
     if (rc.armed) {
       if (rc.mode == MODE_RTH) {
         // Saat mode RTH aktif, jalankan motor pada throttle jelajah otomatis
         // (Pilot tetap bisa memberi gas lebih besar dengan stik jika diinginkan)
         uint16_t target_thr = (rc.throttle_us > RTH_CRUISE_THROTTLE_US) ? rc.throttle_us : RTH_CRUISE_THROTTLE_US;
-        out.motor_esc_us = (uint16_t)constrain(target_thr, MOTOR_IDLE_US, MOTOR_MAX_US);
+        base_thr = (uint16_t)constrain(target_thr, MOTOR_IDLE_US, MOTOR_MAX_US);
       } else if (!rc.failsafe) {
         if (rc.throttle_us <= 1070) {
-          out.motor_esc_us = MOTOR_DISARMED_US; // Stik di bawah (FlySky SBUS min ~1042) -> motor diam 0% (1000 us)
+          base_thr = MOTOR_DISARMED_US; // Stik di bawah (FlySky SBUS min ~1042) -> motor diam 0% (1000 us)
         } else {
-          out.motor_esc_us = (uint16_t)constrain(rc.throttle_us, MOTOR_IDLE_US, MOTOR_MAX_US);
+          base_thr = (uint16_t)constrain(rc.throttle_us, MOTOR_IDLE_US, MOTOR_MAX_US);
         }
       } else {
-        out.motor_esc_us = MOTOR_DISARMED_US;
+        base_thr = MOTOR_DISARMED_US;
       }
     } else {
-      out.motor_esc_us = MOTOR_DISARMED_US;
+      base_thr = MOTOR_DISARMED_US;
     }
 
-    writeOutputs(out.servo_left_us, out.servo_right_us, out.motor_esc_us);
+    out.motor_esc_us = base_thr;
+
+  #ifdef PIN_MOTOR_ESC_RIGHT
+    // Twin-Motor Differential Thrust untuk Yaw / Tailsitter Hover
+    if (rc.armed && base_thr > MOTOR_IDLE_US && ENABLE_DIFF_THRUST) {
+      int16_t yaw_delta = (int16_t)rc.yaw_us - 1500;
+      int16_t diff_us   = (int16_t)(yaw_delta * DIFF_THRUST_GAIN);
+      diff_us = constrain(diff_us, -DIFF_THRUST_MAX_US, DIFF_THRUST_MAX_US);
+
+      // Stik Yaw Kanan (>1500) -> Motor Kiri tambah gas (+diff), Motor Kanan kurangi gas (-diff)
+      out.motor_esc_us       = (uint16_t)constrain((int32_t)base_thr + diff_us, MOTOR_IDLE_US, MOTOR_MAX_US);
+      out.motor_esc_right_us = (uint16_t)constrain((int32_t)base_thr - diff_us, MOTOR_IDLE_US, MOTOR_MAX_US);
+    } else {
+      out.motor_esc_right_us = base_thr;
+    }
+    writeOutputs(out.servo_left_us, out.servo_right_us, out.motor_esc_us, out.motor_esc_right_us);
+  #else
+    writeOutputs(out.servo_left_us, out.servo_right_us, out.motor_esc_us, out.motor_esc_us);
+  #endif
   }
 
 private:
@@ -145,26 +190,29 @@ private:
     Servo motor_esc_;
   #endif
 
-  void writeOutputs(uint16_t left_us, uint16_t right_us, uint16_t esc_us) {
+  void writeOutputs(uint16_t left_us, uint16_t right_us, uint16_t esc_left_us, uint16_t esc_right_us = 1000) {
     #if defined(ARDUINO_ARCH_RP2040) || defined(TARGET_RP2040)
       // Update langsung ke register double-buffered Hardware PWM RP2040
-      // GP6 (Chan A): pulsa HIGH di awal periode (0 .. left_us)
-      // GP7 (Chan B inverted): pulsa HIGH di akhir periode (20000 - right_us .. 20000)
-      pwm_set_gpio_level(PIN_SERVO_LEFT,  left_us);
-      pwm_set_gpio_level(PIN_SERVO_RIGHT, 20000 - right_us);
-      pwm_set_gpio_level(PIN_MOTOR_ESC,   esc_us);
+      // GP2 / Chan A (PIN_SERVO_RIGHT): pulsa HIGH di awal periode (0 .. right_us)
+      // GP3 / Chan B inverted (PIN_SERVO_LEFT): pulsa HIGH di akhir periode (20000 - left_us .. 20000)
+      pwm_set_gpio_level(PIN_SERVO_RIGHT, right_us);
+      pwm_set_gpio_level(PIN_SERVO_LEFT,  20000 - left_us);
+      pwm_set_gpio_level(PIN_MOTOR_ESC,   esc_left_us);
+    #ifdef PIN_MOTOR_ESC_RIGHT
+      pwm_set_gpio_level(PIN_MOTOR_ESC_RIGHT, esc_right_us);
+    #endif
     #elif defined(ESP32)
       // Konversi mikrodetik (dari periode 20.000 us @ 50Hz) ke resolusi 16-bit (65535)
-      uint32_t duty_l = ((uint32_t)left_us  * 65536UL) / 20000UL;
-      uint32_t duty_r = ((uint32_t)right_us * 65536UL) / 20000UL;
-      uint32_t duty_m = ((uint32_t)esc_us   * 65536UL) / 20000UL;
+      uint32_t duty_l = ((uint32_t)left_us     * 65536UL) / 20000UL;
+      uint32_t duty_r = ((uint32_t)right_us    * 65536UL) / 20000UL;
+      uint32_t duty_m = ((uint32_t)esc_left_us * 65536UL) / 20000UL;
       ledcWrite(0, duty_l);
       ledcWrite(1, duty_r);
       ledcWrite(2, duty_m);
     #else
       servo_left_.writeMicroseconds(left_us);
       servo_right_.writeMicroseconds(right_us);
-      motor_esc_.writeMicroseconds(esc_us);
+      motor_esc_.writeMicroseconds(esc_left_us);
     #endif
   }
 };

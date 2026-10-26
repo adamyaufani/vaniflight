@@ -1,11 +1,26 @@
 # Changelog — VaniFlight (Autonomous Flying Wing Flight Controller)
 
 > **Dokumen:** `CHANGELOG.md`
-> **Versi Dokumen:** `v0.4.3`
+> **Versi Dokumen:** `v0.5.0`
 > **Sejak Versi:** `v0.1.0 (2026-10-18)`
-> **Terakhir Diperbarui:** `2026-10-25`
+> **Terakhir Diperbarui:** `2026-10-26`
 
 Semua perubahan penting pada arsitektur *firmware*, algoritma kendali, fitur keselamatan, dan dokumentasi dicatat di dokumen ini berdasarkan versi rilis.
+
+---
+
+## [`v0.5.0`] — 2026-10-26 (Migrasi Pinout Resmi PCB "VANIFLIGHT V 1.0", Twin-Motor & Differential Thrust)
+
+### Ditambahkan & Diperbaiki
+- **Migrasi Pinout Resmi Custom PCB "VANIFLIGHT V 1.0" ([`config.h`](flying_wing_fc/config.h), [`README.md`](README.md)):**
+  - Pemetaan 8-Channel Servo Rail: `S1` (GP14 ESC Kiri), `S2` (GP13 ESC Kanan), `S3` (GP3 Elevon L), `S4` (GP2 Elevon R), `S5`..`S8` (GP6, GP7, GP11, GP10), `AUX` pad (GP12).
+  - Mengamankan pinout servo ke RP2040 PWM Slice 1 (`GP2` Slice 1A pulsa normal, `GP3` Slice 1B pulsa terbalik / *phase-staggered*) untuk mencegah lonjakan arus serentak (*inrush current*).
+  - Inisialisasi pin standby `S5`..`S8` agar tidak berstatus floating di PCB.
+- **Dukungan Twin-Motor & Differential Thrust ([`mixer.h`](flying_wing_fc/mixer.h)):**
+  - Implementasi kendali beda kecepatan motor kiri (`S1`) dan motor kanan (`S2`) untuk kendali yaw dinamis pada konfigurasi twin-motor & VTOL Tailsitter hover.
+  - Parameter `ENABLE_DIFF_THRUST`, `DIFF_THRUST_GAIN (0.25)`, dan `DIFF_THRUST_MAX_US (±150 µs)` di [`config.h`](flying_wing_fc/config.h).
+- **Arsitektur Telemetri ESP32-C3 ([`config.h`](flying_wing_fc/config.h)):**
+  - Penetapan jalur serial `GP28` (RX) dan `GP29` (TX) ke ESP32-C3 onboard menggunakan driver `SerialPIO` (PIO hardware UART buffer) untuk menghindari tabrakan dengan `UART0` (SBUS pada GP0/GP1) dan `UART1` (GPS pada GP8/GP9).
 
 ---
 

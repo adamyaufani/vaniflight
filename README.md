@@ -2,9 +2,9 @@
 
 > **Nama Proyek:** `VaniFlight` *(Yaufani Flight Controller — kebalikan dari INAV)*
 > **Dokumen:** `README.md`
-> **Versi Firmware & Dokumen:** `v0.4.3`
+> **Versi Firmware & Dokumen:** `v0.5.0`
 > **Sejak Versi:** `v0.1.0 (2026-10-18)`
-> **Terakhir Diperbarui:** `2026-10-25`
+> **Terakhir Diperbarui:** `2026-10-26`
 > **Riwayat Lengkap Perubahan:** Lihat [`CHANGELOG.md`](CHANGELOG.md)
 > **Peta Jalan Menuju 3-Plane Swarm:** Lihat [`ROADMAP.md`](ROADMAP.md)
 
@@ -39,23 +39,25 @@ Satu kode sumber yang sama otomatis mendukung **4 keluarga mikrokontroler** saat
 > Jangan mengambil listrik 5V untuk menggerakkan Servo dari pin `3.3V` mikrokontroler!
 > Sambungkan kabel **Merah (+5V)** dan **Hitam/Coklat (GND)** dari **BEC ESC** langsung ke jalur daya kedua Servo, serta ke pin **5V** dan **GND** pada board mikrokontroler.
 
-### A. Konfigurasi Utama: Waveshare RP2040-Zero / Raspberry Pi Pico
+### A. Konfigurasi Resmi: Custom PCB "VANIFLIGHT V 1.0" (RP2040-Zero + ESP32-C3)
 
-| Komponen | Pin di Komponen | Pin di RP2040-Zero | Keterangan |
-| :--- | :--- | :--- | :--- |
-| **Sensor IMU (GY-521 MPU6050)** | `VCC` & `GND` | `3V3` & `GND` | Daya bersih 3.3V |
-| | `SDA` & `SCL` | **GP4** (`SDA`) & **GP5** (`SCL`) | Bus I2C0 (`0x68`) |
-| **Sensor Baro (GY-BMP280 3.3V)** | `VCC` & `GND` | `3V3` & `GND` | **Wajib 3.3V** |
-| | `SDA` & `SCL` | **GP4** (`SDA`) & **GP5** (`SCL`) | Paralel dengan MPU6050 (`0x76` / `0x77`) |
-| **Servo Sayap Kiri (Elevon L)** | Sinyal (Kuning/Putih) | **GP6** | Hardware PWM Slice 3A |
-| **Servo Sayap Kanan (Elevon R)** | Sinyal (Kuning/Putih) | **GP7** | Hardware PWM Slice 3B (*Phase-Staggered*) |
-| **ESC Motor Brushless** | Sinyal (Putih) | **GP14** | Hardware PWM Slice 7A (`1000..2000 µs`) |
-| **Beeper / Buzzer Indikator (2-Pin)** | Kaki `(+)` & `(-)` | **GP15** (`+`) & **GND** (`-`) | SIO GPIO 12 mA (Mendukung Buzzer Active & Passive) |
-| **Receiver Serial (SBUS / iBUS / CRSF)** | Sinyal `SBUS` / `TX` | **GP1** (`UART0 RX`) | Inverter silikon internal aktif otomatis untuk SBUS |
-| | `RX` Receiver *(khusus ELRS)* | **GP0** (`UART0 TX`) | |
-| **GPS RushFPV M10** | `5V` & `GND` | `5V` & `GND` | |
-| | `TX` GPS | **GP9** (`UART1 RX`) | Biner `UBX-NAV-PVT` (`230400` baud) / Auto-Baud NMEA |
-| | `RX` GPS | **GP8** (`UART1 TX`) | |
+| Port / Header | Komponen Fisik | Pin RP2040-Zero | Sinyal / Protokol | Keterangan |
+| :--- | :--- | :--- | :--- | :--- |
+| **S1** | **ESC Motor Kiri / Utama** | **GP14** | Hardware PWM Slice 7A | Motor kiri twin-motor / motor utama single-motor |
+| **S2** | **ESC Motor Kanan** | **GP13** | Hardware PWM Slice 6B | Motor kanan twin-motor (*Differential Thrust*) |
+| **S3** | **Servo Sayap Kiri (Elevon L)**| **GP3** | Hardware PWM Slice 1B | *Phase-Staggered* (Inverted Polarity 20 ms) |
+| **S4** | **Servo Sayap Kanan (Elevon R)**| **GP2**| Hardware PWM Slice 1A | Pulsa normal di awal periode 20 ms |
+| **S5** | **Aux 1 / Motor 3 / Flap** | **GP6** | Hardware PWM Slice 3A | Siap pakai untuk 4-motor VTOL / tilt / gimbal |
+| **S6** | **Aux 2 / Motor 4 / Rudder**| **GP7** | Hardware PWM Slice 3B | Siap pakai untuk rudder mekanikal / tilt |
+| **S7** | **Aux 3 / Gimbal Pan** | **GP11** | Hardware PWM Slice 5B | Channel ekspansi kamera |
+| **S8** | **Aux 4 / Gimbal Tilt** | **GP10** | Hardware PWM Slice 5A | Channel ekspansi kamera |
+| **AUX Pad** | **Pad Solder Cadangan** | **GP12** | GPIO / PWM Slice 6A | Pad solder serbaguna |
+| **IMU** | **GY-521 MPU6050** | **GP4** (SDA) / **GP5** (SCL)| Bus I2C0 (`0x68`) | Daya 3.3V bersih |
+| **BARO** | **GY-BMP280** | **GP4** (SDA) / **GP5** (SCL)| Bus I2C0 (`0x76`/`0x77`)| Paralel dengan MPU6050 |
+| **GPS** | **RushFPV M10 GPS** | **GP8** (TX) / **GP9** (RX) | UART1 (`230400` baud)| Daya +5V, UBX biner |
+| **RX** | **Receiver Serial (SBUS)** | **GP1** (RX) / **GP0** (TX) | UART0 (`100000` 8E2) | Inverter silikon internal aktif otomatis |
+| **ESP32** | **ESP32-C3 Super Mini** | **GP28** (RX) / **GP29** (TX)| SerialPIO UART | Link telemetri ESP-NOW tanpa memakan UART0 |
+| **BUZZER**| **Active Buzzer 5V** | **GP15** (`+`) / **GND** (`-`) | SIO GPIO 12 mA | Bunyi indikator arming & status |
 
 ---
 
