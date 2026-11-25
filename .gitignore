@@ -1,6 +1,8 @@
 .DS_Store
 .pio/
 build/
+docs_build/
+site/
 *.elf
 *.uf2
 *.bin

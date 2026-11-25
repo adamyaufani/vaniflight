@@ -1,0 +1,66 @@
+site_name: VaniFlight
+site_description: Dokumentasi teknis resmi VaniFlight Flight Controller untuk Flying Wing, Plank, dan Tailsitter VTOL berbasis RP2040-Zero.
+site_url: https://adamyaufani.github.io/vaniflight/
+repo_url: https://github.com/adamyaufani/vaniflight
+repo_name: adamyaufani/vaniflight
+docs_dir: docs_build
+
+theme:
+  name: material
+  language: id
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: light blue
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Beralih ke mode gelap
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: light blue
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Beralih ke mode terang
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Beranda: index.md
+  - Panduan Teknis:
+      - 1. Perangkat Keras & Pengkabelan: Hardware-and-Wiring.md
+      - 2. Kompilasi & Pemrograman Firmware: Firmware-Flashing-and-Setup.md
+      - 3. Panduan Web Configurator & CLI: Web-Configurator-Guide.md
+      - 4. Radio & OpenTX / OpenI6X: Radio-and-OpenTX-Setup.md
+      - 5. Pengecekan Pra-Terbang & Keamanan: Pre-Flight-and-Safety-Checks.md
+      - 6. Pemecahan Masalah & FAQ: Troubleshooting-and-FAQ.md
+  - Proyek:
+      - Changelog: CHANGELOG.md
+      - Roadmap: ROADMAP.md
+  - Web Configurator (3D): https://adamyaufani.github.io/vaniflight/configurator/
