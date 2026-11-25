@@ -108,6 +108,21 @@ Ketik huruf berikut lalu tekan **Enter** (semua perintah konfigurasi hanya diizi
 * **`[c]`** : Kalibrasi Gyro & Titik Datar (*Ground Level Calibration*) di meja rata
 * **`[z]`** : Reset semua Trim (Servo & Level) kembali ke `0`
 * **`[1]` / `[2]`** : Balik arah (*Reverse*) Servo Kiri / Servo Kanan secara *live*
+* **`[a]`** : Toggle *Pre-Arm Bypass* (lewati pemeriksaan GPS 3D dan kemiringan $> 35^\circ$)
 * **`[w]`** : Simpan seluruh pengaturan ke **EEPROM Flash Permanen**
-* **`[b]`** : Masuk mode **BOOTSEL / DFU** via software tanpa menekan tombol fisik di board
-* **`[h]`** : Tampilkan banner versi firmware & menu bantuan
+* **`[b]`** : Masuk mode **BOOTSEL / DFU** via perangkat lunak tanpa menekan tombol fisik
+* **`[e]`** : Aktifkan mode jembatan *USB-to-UART* (`GP28`/`GP29`) untuk memprogram ESP32-C3
+* **`[h]`** : Tampilkan banner versi *firmware* dan menu bantuan
+
+---
+
+## 5. Kredit dan Referensi (*Acknowledgments*)
+
+Pengembangan VaniFlight memanfaatkan algoritma terbuka serta terinspirasi oleh berbagai proyek dan pustaka komunitas *open-source* berikut:
+
+* **Sebastian O. H. Madgwick**: Algoritma estimasi sikap 6-DOF *Quaternion AHRS* (*gradient descent orientation filter*) yang diimplementasikan pada [`flying_wing_fc/imu.h`](flying_wing_fc/imu.h).
+* **[dRehmFlight](https://github.com/nickrehm/dRehmFlight) (Nicholas Rehm)**: Inspirasi arsitektur *flight controller* berbasis Arduino yang ringkas, mudah dibaca, dan transparan untuk eksperimen *fixed-wing* dan VTOL.
+* **[madflight](https://github.com/qqqlab/madflight) (qqqlab)**: Inspirasi struktur pemisahan modul mikrokontroler serbaguna serta penyajian diagram arsitektur subsistem.
+* **[INAV](https://github.com/iNavFlight/inav) dan [ArduPilot](https://github.com/ArduPilot/ardupilot)**: Inspirasi konseptual untuk fitur penerbangan *fixed-wing* meliputi *In-Flight AutoTrim*, *Pre-Arm Safety Check* beserta opsi *bypass*, pola *Return-to-Home* (*loiter*), serta tata letak antarmuka koneksi serial.
+* **[arduino-pico](https://github.com/earlephilhower/arduino-pico) (Earle F. Philhower, III)**: *Core* RP2040/RP2350, `SerialPIO`, dan antarmuka *Hardware PWM* / EEPROM.
+* **[Three.js](https://threejs.org/)**, **[Leaflet](https://leafletjs.com/) / OpenStreetMap**, dan **[Docsify](https://docsify.js.org/)**: Pustaka visualisasi 3D, pemetaan navigasi GPS, dan dokumentasi web pada GitHub Pages.

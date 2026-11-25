@@ -40,3 +40,15 @@ Seluruh modul kendali inti ditulis secara mandiri tanpa ketergantungan pustaka e
 | **Penerima RC** | Dukungan protokol SBUS (dengan inverter perangkat keras internal RP2040), iBUS, CRSF, dan PPM, dilengkapi pemindaian otomatis antara SBUS dan iBUS |
 | **Jalur Telemetri** | Antarmuka `SerialPIO` (`GP28` dan `GP29`) untuk modul ESP32-C3, dilengkapi mode jembatan *USB-to-UART passthrough* |
 | **Antarmuka Konfigurasi** | VaniFlight Web Configurator berbasis Web Serial API, Three.js, dan Leaflet yang dapat diakses melalui peramban Chrome, Edge, atau Brave |
+
+---
+
+## Kredit dan Referensi
+
+Pengembangan VaniFlight memanfaatkan algoritma terbuka serta terinspirasi oleh proyek dan pustaka *open-source* berikut:
+
+* **Sebastian O. H. Madgwick**: Algoritma filter orientasi 6-DOF *Quaternion AHRS* pada [`flying_wing_fc/imu.h`](../flying_wing_fc/imu.h).
+* **[dRehmFlight](https://github.com/nickrehm/dRehmFlight) (Nicholas Rehm)**: Inspirasi arsitektur *flight controller* berbasis Arduino yang ringkas dan mudah dimodifikasi untuk *fixed-wing* dan VTOL.
+* **[madflight](https://github.com/qqqlab/madflight) (qqqlab)**: Inspirasi struktur modularitas mikrokontroler dan diagram arsitektur modul.
+* **[INAV](https://github.com/iNavFlight/inav) dan [ArduPilot](https://github.com/ArduPilot/ardupilot)**: Inspirasi konseptual fitur *In-Flight AutoTrim*, pemeriksaan keamanan *Pre-Arm Check* beserta mekanisme *bypass*, navigasi *Return-to-Home*, dan antarmuka pemilihan port serial.
+* **[arduino-pico](https://github.com/earlephilhower/arduino-pico) (Earle F. Philhower, III)**, **[Three.js](https://threejs.org/)**, **[Leaflet](https://leafletjs.com/) / OpenStreetMap**, dan **[Docsify](https://docsify.js.org/)**: Pustaka inti untuk *runtime* RP2040, visualisasi 3D, peta GPS, dan dokumentasi web.
