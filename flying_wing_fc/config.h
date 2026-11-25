@@ -86,7 +86,9 @@
   // Komunikasi telemetri dengan ESP32-C3 pada GP28/GP29 diimplementasikan
   // via SerialPIO (PIO-based UART hardware buffer), bebas dari limitasi port UART0.
   #define PIN_ESP32_UART_RX   28  // GP28 (Menerima sinyal dari TX ESP32-C3 via SerialPIO)
-  #define PIN_ESP32_UART_TX   29  // GP29 (Mengirim telemetri ke RX ESP32-C3 via SerialPIO)
+  #define PIN_ESP32_UART_TX   29  // GP29 (Mengirim telemetri/flash ke RX ESP32-C3 via SerialPIO)
+  #define PIN_ESP32_BOOT      26  // GP26 (Opsional ke GPIO9/BOOT ESP32-C3 untuk Auto-Flash)
+  #define PIN_ESP32_RST       27  // GP27 (Opsional ke RST/EN ESP32-C3 untuk Auto-Reset)
 
   // Port GPS RushFPV M10 (Serial2 / UART1)
   #define PIN_GPS_UART_TX     8   // GP8 (UART1 TX -> Sambung ke RX GPS)
@@ -213,12 +215,18 @@
 #define LOOP_INTERVAL_US      (1000000UL / LOOP_RATE_HZ)
 
 // Pilihan Orientasi Pemasangan Board / Sensor IMU MPU6050:
-#define ROTATION_DEFAULT      0  // Normal: Chip menghadap atas, sumbu X menghadap ke DEPAN (Hidung)
-#define ROTATION_CW90         1  // Diputar 90° searah jarum jam (Kanan)
-#define ROTATION_CW180        2  // Diputar 180° (Sumbu X menghadap ke BELAKANG / Ekor)
-#define ROTATION_CW270        3  // Diputar 270° / 90° berlawanan jarum jam (Kiri)
+// Default (0): Posisi sejajar operator menghadap monitor:
+//   - Moncong (Depan) = Sisi TANPA LED (VCC)
+//   - Ekor (Belakang) = Sisi ADA LED (INT)
+//   - Sayap Kiri      = Sisi Solder Pad (VCC..INT)
+//   - Sayap Kanan     = Sisi Tanpa Solder Pad (ITG/MPU)
+#define ROTATION_DEFAULT      0  // Sejajar operator: Moncong=VCC(Tanpa LED), Ekor=LED, Kiri=Solder Pad, Kanan=Tanpa Pad
+#define ROTATION_CW90         1  // Diputar 90° searah jarum jam
+#define ROTATION_CW180        2  // Diputar 180°
+#define ROTATION_CW270        3  // Diputar 270° / 90° berlawanan jarum jam
 #define ROTATION_FLIP         4  // Terbalik (Menghadap bawah)
 #define ROTATION_FLIP_CW90    5  // Terbalik + putar 90°
+#define ROTATION_RAW_SENSOR   6  // Mentah asli sensor GY-521 (Moncong=Solder Pad, Ekor=ITG/MPU, Kanan=LED)
 
 // PILIH ROTASI BOARD ANDA DI SINI:
 #ifndef BOARD_ROTATION
@@ -293,6 +301,8 @@
 #define MOTOR_IDLE_US         1000    // Flying Wing: motor tetap diam (0%) saat Armed & throttle di bawah
 #define MOTOR_MAX_US          2000    // Gas penuh
 #define ARM_SAFETY_MAX_THR_US 1080    // Throttle harus di bawah nilai ini agar bisa di-Arm
+#define ARM_MAX_TILT_DEG      35.0f   // Batas kemiringan maksimal saat Arming di mode stabilisasi (derajat)
+#define ARM_BYPASS_WINDOW_MS  2500UL  // Jendela waktu 2x jentik saklar Arm untuk bypass cepat GPS/Tilt di lapangan
 
 // ============================================================================
 // 6. KONFIGURASI TWIN-MOTOR DIFFERENTIAL THRUST (TAILSITTER / TWIN MOTOR)

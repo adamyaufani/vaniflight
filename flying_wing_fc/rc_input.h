@@ -22,6 +22,7 @@
 #include <Arduino.h>
 #include "config.h"
 #include "gps.h"
+#include "imu.h"
 
 #if defined(STM32F4xx) || defined(ARDUINO_ARCH_STM32)
   extern Uart Serial1;
@@ -37,9 +38,26 @@ enum FlightMode : uint8_t {
   MODE_RTH      = 4
 };
 
+// Bitmask Alasan Penolakan Arming (Pre-Arm Safety Check)
+enum ArmBlockFlag : uint16_t {
+  ARM_OK             = 0,
+  ARM_BLOCK_NO_RC    = (1 << 0), // Wajib: Sinyal RC hilang / Failsafe
+  ARM_BLOCK_THROTTLE = (1 << 1), // Wajib: Stik gas belum nol (>= 1080 us)
+  ARM_BLOCK_BOOT_SW  = (1 << 2), // Wajib: Saklar Arm sudah ON saat awal (harus OFF dulu 1x)
+  ARM_BLOCK_RTH_SW   = (1 << 3), // Wajib: Saklar RTH (SwA) sedang ON di darat
+  ARM_BLOCK_NO_IMU   = (1 << 4), // Wajib (kecuali MANUAL): Sensor IMU MPU6050 terputus
+  ARM_BLOCK_ANGLE    = (1 << 5), // Bypassable: Pesawat miring > 35 deg di mode stabilisasi
+  ARM_BLOCK_NO_GPS   = (1 << 6)  // Bypassable: GPS belum 3D Fix / Home belum terkunci
+};
+
+static constexpr uint16_t ARM_HARD_SAFETY_MASK =
+  ARM_BLOCK_NO_RC | ARM_BLOCK_THROTTLE | ARM_BLOCK_BOOT_SW | ARM_BLOCK_RTH_SW | ARM_BLOCK_NO_IMU;
+static constexpr uint16_t ARM_SOFT_BYPASS_MASK =
+  ARM_BLOCK_ANGLE | ARM_BLOCK_NO_GPS;
+
 struct RCState {
-  uint16_t roll_us     = 1500;
-  uint16_t pitch_us    = 1500;
+  uint16_t roll_us        = 1500;
+  uint16_t pitch_us       = 1500;
   uint16_t throttle_us    = 1000;
   uint16_t yaw_us         = 1500;
   uint16_t arm_us         = 1000; // CH8 (SwB): Arm / Disarm
@@ -47,10 +65,12 @@ struct RCState {
   uint16_t mode_us        = 1500; // CH9 (SwC 3-Pos): Manual / Angle / AltHold
   uint16_t rth_sw_us      = 1000; // CH7 (SwA): RTH
 
-  bool armed           = false;
-  bool failsafe        = true;
-  bool bench_test_mode = true;
-  FlightMode mode      = MODE_MANUAL;
+  bool armed              = false;
+  bool failsafe           = true;
+  bool bench_test_mode    = true;
+  bool prearm_bypass      = false; // True jika bypass GPS & Tilt aktif (permanen/CLI atau sesi)
+  uint16_t arm_block_flags = ARM_BLOCK_NO_RC;
+  FlightMode mode         = MODE_MANUAL;
 
   // Diagnostik (Omnibus F4: U1=RX1, U6=RX6/J7, U3=RX3)
   uint32_t rx_bytes[3]   = {0, 0, 0};
@@ -93,7 +113,8 @@ namespace RCPPMDecoder {
 class RCInputManager {
 public:
   RCState state;
-  uint8_t protocol = RC_PROTO_IBUS; // 1=iBUS, 2=CRSF, 3=SBUS, 4=PPM
+  uint8_t protocol      = RC_PROTO_IBUS; // 1=iBUS, 2=CRSF, 3=SBUS, 4=PPM
+  bool    prearm_bypass = false;         // Pengaturan permanen Bypass GPS & Tilt (dari EEPROM / CLI [a])
 
   void begin(uint8_t proto = RC_PROTO_IBUS) {
     protocol = proto;
@@ -151,6 +172,16 @@ public:
       initialized_ = true;
 
     #elif defined(ARDUINO_ARCH_RP2040) || defined(TARGET_RP2040)
+      if (protocol == RC_PROTO_PPM) {
+        if (initialized_) RC_SERIAL.end();
+        gpio_set_inover(PIN_RC_UART_RX, GPIO_OVERRIDE_NORMAL);
+        pinMode(PIN_RC_UART_RX, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(PIN_RC_UART_RX), RCPPMDecoder::isr, FALLING);
+        initialized_ = true;
+        return;
+      } else {
+        detachInterrupt(digitalPinToInterrupt(PIN_RC_UART_RX));
+      }
       if (initialized_) RC_SERIAL.end();
       RC_SERIAL.setTX(PIN_RC_UART_TX);
       RC_SERIAL.setRX(PIN_RC_UART_RX);
@@ -169,7 +200,7 @@ public:
     #endif
   }
 
-  void update(GPSManager &gps_mgr) {
+  void update(GPSManager &gps_mgr, const IMUState &imu) {
     bool got_frame = false;
     uint32_t now_us = micros();
 
@@ -219,23 +250,35 @@ public:
         }
       }
     #else
-      while (RC_SERIAL.available()) {
-        uint8_t b = (uint8_t)RC_SERIAL.read();
-        state.rx_bytes[0]++;
-        state.last_bytes[0] = state.last_bytes[1];
-        state.last_bytes[1] = state.last_bytes[2];
-        state.last_bytes[2] = state.last_bytes[3];
-        state.last_bytes[3] = b;
-
-        bool frame_ok = false;
-        if (protocol == RC_PROTO_IBUS) frame_ok = parseIBUSByte(ports_[0], b, now_us);
-        else if (protocol == RC_PROTO_SBUS) frame_ok = parseSBUSByte(ports_[0], b, now_us);
-        else if (protocol == RC_PROTO_CRSF) frame_ok = parseCRSFByte(ports_[0], b);
-
-        if (frame_ok) {
+      if (protocol == RC_PROTO_PPM) {
+        if (millis() - RCPPMDecoder::last_frame_ms < 300 && RCPPMDecoder::last_frame_ms > 0) {
+          noInterrupts();
+          for (uint8_t c = 0; c < 8; c++) raw_ch_[c] = RCPPMDecoder::ch_raw[c];
+          interrupts();
+          last_valid_ms_ = millis();
           state.active_port = 1;
-          state.active_proto = (protocol == RC_PROTO_IBUS) ? "iBUS" : "SBUS";
+          state.active_proto = "PPM";
           got_frame = true;
+        }
+      } else {
+        while (RC_SERIAL.available()) {
+          uint8_t b = (uint8_t)RC_SERIAL.read();
+          state.rx_bytes[0]++;
+          state.last_bytes[0] = state.last_bytes[1];
+          state.last_bytes[1] = state.last_bytes[2];
+          state.last_bytes[2] = state.last_bytes[3];
+          state.last_bytes[3] = b;
+
+          bool frame_ok = false;
+          if (protocol == RC_PROTO_IBUS) frame_ok = parseIBUSByte(ports_[0], b, now_us);
+          else if (protocol == RC_PROTO_SBUS) frame_ok = parseSBUSByte(ports_[0], b, now_us);
+          else if (protocol == RC_PROTO_CRSF) frame_ok = parseCRSFByte(ports_[0], b);
+
+          if (frame_ok) {
+            state.active_port = 1;
+            state.active_proto = (protocol == RC_PROTO_IBUS) ? "iBUS" : ((protocol == RC_PROTO_SBUS) ? "SBUS" : "CRSF");
+            got_frame = true;
+          }
         }
       }
     #endif
@@ -254,9 +297,23 @@ public:
       state.mode_us        = constrain(raw_ch_[8], 1000, 2000); // CH9 (SwC 3-Pos): Manual / Angle / AltHold
       state.autotrim_sw_us = constrain(raw_ch_[9], 1000, 2000); // CH10 (SwD 3-Pos): AutoTrim & Auto-Level Switch
 
-      updateArmAndMode();
+      updateArmAndMode(gps_mgr.state, imu);
     } else if (millis() - last_valid_ms_ > 500) {
       state.failsafe = true;
+      arm_switch_seen_low_ = false;
+      prev_switch_wants_arm_ = false;
+      session_bypass_active_ = false;
+
+      // Auto-Detect SBUS <-> iBUS di GP1 saat belum terkunci sinyal (memudahkan gonta-ganti setting di OpenTX)
+      #if defined(ARDUINO_ARCH_RP2040) || defined(TARGET_RP2040)
+      if (!state.armed && (protocol == RC_PROTO_SBUS || protocol == RC_PROTO_IBUS)) {
+        if (millis() - last_autoscan_ms_ > 650) {
+          last_autoscan_ms_ = millis();
+          uint8_t next_proto = (protocol == RC_PROTO_SBUS) ? RC_PROTO_IBUS : RC_PROTO_SBUS;
+          begin(next_proto);
+        }
+      }
+      #endif
 
       // KEAMANAN TINGKAT TINGGI (FAILSAFE):
       // RTH otomatis hanya boleh aktif jika pesawat MEMANG SUDAH ARMED di udara sebelum hilang sinyal!
@@ -272,11 +329,41 @@ public:
         state.armed       = false;
         state.throttle_us = MOTOR_DISARMED_US;
       }
+      state.prearm_bypass = prearm_bypass;
+      state.arm_block_flags = computeArmBlockFlags(gps_mgr.state, imu, prearm_bypass);
+    } else if (!state.failsafe) {
+      // Tetap perbarui status Pre-Arm secara live di antara frame RC (misal saat pesawat dimiringkan / GPS baru lock)
+      state.prearm_bypass = (prearm_bypass || session_bypass_active_);
+      if (!state.armed) {
+        state.arm_block_flags = computeArmBlockFlags(gps_mgr.state, imu, state.prearm_bypass);
+      } else {
+        state.arm_block_flags = ARM_OK;
+      }
     }
 
     state.roll_norm     = applyDeadband((float)state.roll_us  - 1500.0f, 12.0f) / 500.0f;
     state.pitch_norm    = applyDeadband((float)state.pitch_us - 1500.0f, 12.0f) / 500.0f;
     state.throttle_norm = constrain(((float)state.throttle_us - 1000.0f) / 1000.0f, 0.0f, 1.0f);
+  }
+
+  void formatArmBlockReason(char *buf, size_t len) const {
+    if (!buf || len == 0) return;
+    if (state.arm_block_flags == ARM_OK) {
+      snprintf(buf, len, "OK");
+      return;
+    }
+    buf[0] = '\0';
+    auto appendFlag = [&](const char *name) {
+      if (buf[0] != '\0') strncat(buf, ",", len - strlen(buf) - 1);
+      strncat(buf, name, len - strlen(buf) - 1);
+    };
+    if (state.arm_block_flags & ARM_BLOCK_NO_RC)    appendFlag("NO_RC");
+    if (state.arm_block_flags & ARM_BLOCK_THROTTLE) appendFlag("THR_HIGH");
+    if (state.arm_block_flags & ARM_BLOCK_BOOT_SW)  appendFlag("BOOT_SW");
+    if (state.arm_block_flags & ARM_BLOCK_RTH_SW)   appendFlag("RTH_SW");
+    if (state.arm_block_flags & ARM_BLOCK_NO_IMU)   appendFlag("NO_IMU");
+    if (state.arm_block_flags & ARM_BLOCK_ANGLE)    appendFlag("TILT");
+    if (state.arm_block_flags & ARM_BLOCK_NO_GPS)   appendFlag("NO_GPS");
   }
 
   const char* getModeName() const {
@@ -301,9 +388,14 @@ public:
   }
 
 private:
-  bool       initialized_   = false;
-  uint16_t   raw_ch_[10]    = {1500, 1500, 1000, 1500, 1000, 1000, 1000, 1000, 1000, 1000};
-  uint32_t   last_valid_ms_ = 0;
+  bool       initialized_           = false;
+  bool       arm_switch_seen_low_   = false;
+  bool       prev_switch_wants_arm_ = false;
+  bool       session_bypass_active_ = false;
+  uint16_t   raw_ch_[10]            = {1500, 1500, 1000, 1500, 1000, 1000, 1000, 1000, 1000, 1000};
+  uint32_t   last_valid_ms_         = 0;
+  uint32_t   last_autoscan_ms_      = 0;
+  uint32_t   last_bypass_attempt_ms_ = 0;
   PortParser ports_[3];
 
   float applyDeadband(float val, float deadband) {
@@ -311,7 +403,31 @@ private:
     return (val > 0.0f) ? (val - deadband) : (val + deadband);
   }
 
-  void updateArmAndMode() {
+  uint16_t computeArmBlockFlags(const GPSState &gps, const IMUState &imu, bool bypass_soft) const {
+    uint16_t flags = ARM_OK;
+
+    // 1. Syarat Wajib Keselamatan (TIDAK PERNAH bisa di-bypass)
+    if (state.failsafe)                        flags |= ARM_BLOCK_NO_RC;
+    if (state.throttle_us >= ARM_SAFETY_MAX_THR_US) flags |= ARM_BLOCK_THROTTLE;
+    if (!arm_switch_seen_low_)                 flags |= ARM_BLOCK_BOOT_SW;
+    if (state.rth_sw_us > 1700)                flags |= ARM_BLOCK_RTH_SW;
+    if (!imu.connected && state.mode != MODE_MANUAL) flags |= ARM_BLOCK_NO_IMU;
+
+    // 2. Syarat Tambahan (BISA di-bypass lewat Configurator/CLI [a] atau 2x jentik saklar Arm)
+    if (!bypass_soft) {
+      if (state.mode != MODE_MANUAL && imu.connected) {
+        if (fabsf(imu.roll_deg) > ARM_MAX_TILT_DEG || fabsf(imu.pitch_deg) > ARM_MAX_TILT_DEG) {
+          flags |= ARM_BLOCK_ANGLE;
+        }
+      }
+      if (!gps.fix_valid || !gps.home_set) {
+        flags |= ARM_BLOCK_NO_GPS;
+      }
+    }
+    return flags;
+  }
+
+  void updateArmAndMode(const GPSState &gps, const IMUState &imu) {
     if (state.rth_sw_us > 1700) {
       state.mode = MODE_RTH;
     } else {
@@ -326,9 +442,45 @@ private:
 
     bool switch_wants_arm = (state.arm_us > 1600);
     if (!switch_wants_arm) {
-      state.armed = false;
-    } else if (!state.armed && state.throttle_us < ARM_SAFETY_MAX_THR_US) {
-      state.armed = true;
+      arm_switch_seen_low_   = true;
+      state.armed            = false;
+      session_bypass_active_ = false;
+    }
+
+    bool rising_edge = (switch_wants_arm && !prev_switch_wants_arm_);
+    prev_switch_wants_arm_ = switch_wants_arm;
+
+    // Cek syarat penuh (strict) dan syarat keras (hard safety)
+    uint16_t strict_flags = computeArmBlockFlags(gps, imu, false);
+    bool hard_ok = ((strict_flags & ARM_HARD_SAFETY_MASK) == ARM_OK);
+    bool only_soft_blocked = hard_ok && ((strict_flags & ARM_SOFT_BYPASS_MASK) != ARM_OK);
+
+    // Quick Field Bypass: Jika terblokir hanya oleh GPS/Tilt, jentikkan saklar Arm ON -> OFF -> ON
+    // 2x cepat dalam 2.5 detik untuk Force Arm sementara di lapangan tanpa laptop!
+    if (rising_edge && !state.armed && !prearm_bypass && only_soft_blocked) {
+      uint32_t now_ms = millis();
+      if (last_bypass_attempt_ms_ > 0 && (now_ms - last_bypass_attempt_ms_) <= ARM_BYPASS_WINDOW_MS) {
+        session_bypass_active_ = true;
+        last_bypass_attempt_ms_ = 0;
+      } else {
+        last_bypass_attempt_ms_ = now_ms;
+      }
+    }
+
+    state.prearm_bypass = (prearm_bypass || session_bypass_active_);
+    uint16_t active_flags = computeArmBlockFlags(gps, imu, state.prearm_bypass);
+
+    if (switch_wants_arm && !state.armed) {
+      if (active_flags == ARM_OK) {
+        state.armed = true;
+        state.arm_block_flags = ARM_OK;
+      } else {
+        state.arm_block_flags = active_flags;
+      }
+    } else if (!state.armed) {
+      state.arm_block_flags = active_flags;
+    } else {
+      state.arm_block_flags = ARM_OK;
     }
   }
 

@@ -1,0 +1,2164 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VaniFlight Configurator</title>
+  <link rel="stylesheet" href="leaflet/leaflet.css" />
+  <script src="leaflet/leaflet.js"></script>
+  <script src="js/three.min.js"></script>
+  <script src="js/GLTFLoader.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent-hover: #1f6feb;
+      --success: #238636;
+      --success-hover: #2ea043;
+      --danger: #da3633;
+      --danger-hover: #f85149;
+      --warning: #d29922;
+      --text: #c9d1d9;
+      --text-bright: #f0f6fc;
+      --text-muted: #8b949e;
+      --cyan: #39c5bb;
+      --orange: #f0883e;
+      --purple: #bc8cff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .logo-area { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      font-size: 24px;
+      background: linear-gradient(135deg, var(--cyan), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 900;
+    }
+    .logo-title { font-size: 18px; font-weight: 700; color: var(--text-bright); }
+    .logo-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--accent);
+      border-radius: 12px;
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      font-weight: 600;
+    }
+    .header-actions { display: flex; align-items: center; gap: 14px; }
+    .status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+      display: inline-block;
+    }
+    .status-dot.connected {
+      background: #3fb950;
+      box-shadow: 0 0 10px #3fb950;
+    }
+
+    /* INAV-Style Port Selector & Circular USB Button */
+    .inav-conn-panel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #11151c;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+    }
+    .inav-port-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .inav-select-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .inav-select {
+      background: #21262d;
+      color: var(--text-bright);
+      border: 1px solid #3b434d;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+    .inav-select:hover, .inav-select:focus {
+      border-color: var(--accent);
+    }
+    .inav-select:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .inav-port-select {
+      min-width: 215px;
+    }
+    .inav-baud-select {
+      min-width: 86px;
+    }
+    .inav-sub-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 0 2px;
+    }
+    .inav-autoconnect-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text);
+    }
+    .inav-autoconnect-label input {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .inav-usb-btn-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      user-select: none;
+      min-width: 64px;
+    }
+    .inav-usb-circle {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.18);
+      background: linear-gradient(145deg, #2ea043, #238636);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(35, 134, 54, 0.45);
+      transition: all 0.18s ease;
+      cursor: pointer;
+    }
+    .inav-usb-btn-wrap:hover .inav-usb-circle {
+      transform: scale(1.06);
+      filter: brightness(1.08);
+    }
+    .inav-usb-btn-wrap.connected .inav-usb-circle {
+      background: linear-gradient(145deg, #ef232a, #c9181e);
+      box-shadow: 0 2px 12px rgba(239, 35, 42, 0.55);
+    }
+    .inav-usb-caption {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: 0.2px;
+    }
+
+    /* Non-blocking Toast Notification (pengganti popup alert) */
+    .toast-banner {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1c2128;
+      color: var(--text-bright);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: all 0.2s ease;
+    }
+    .toast-banner.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .btn {
+      padding: 7px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: var(--success); color: white; border-color: rgba(255,255,255,0.1); }
+    .btn-primary:hover { background: var(--success-hover); }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-danger:hover { background: var(--danger-hover); }
+    .btn-outline {
+      background: rgba(255,255,255,0.05);
+      border-color: var(--border);
+      color: var(--text-bright);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.1); border-color: var(--text-muted); }
+    .btn-warning { background: var(--warning); color: #000; font-weight: 700; }
+    .btn-warning:hover { filter: brightness(1.1); }
+
+    /* Main Container */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar Navigation */
+    nav.sidebar {
+      width: 200px;
+      background: var(--card-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 8px;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .nav-item {
+      padding: 10px 14px;
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s;
+    }
+    .nav-item:hover {
+      background: rgba(255,255,255,0.04);
+      color: var(--text-bright);
+    }
+    .nav-item.active {
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--accent);
+      font-weight: 600;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* Content Area */
+    main.content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    /* Card Panels */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* 3D Model Canvas */
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      background: radial-gradient(circle at center, #1c2333 0%, #0d1117 80%);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    canvas#modelCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .canvas-overlay {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(13, 17, 23, 0.75);
+      backdrop-filter: blur(4px);
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .val-cyan { color: var(--cyan); font-weight: 700; }
+    .val-yellow { color: var(--warning); font-weight: 700; }
+    .val-purple { color: var(--purple); font-weight: 700; }
+
+    /* Channel Bars */
+    .channel-row {
+      margin-bottom: 12px;
+    }
+    .channel-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .bar-bg {
+      height: 22px;
+      background: #0d1117;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #1f6feb, #58a6ff);
+      width: 50%;
+      transition: width 0.05s ease-out;
+    }
+    .bar-center {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(255,255,255,0.25);
+    }
+    .bar-label {
+      position: absolute;
+      left: 8px;
+      top: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.8);
+      text-shadow: 0 1px 2px #000;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .badge-success { background: rgba(35, 134, 54, 0.25); color: #3fb950; border: 1px solid #238636; }
+    .badge-danger { background: rgba(218, 54, 51, 0.25); color: #f85149; border: 1px solid #da3633; }
+    .badge-info { background: rgba(88, 166, 255, 0.2); color: #58a6ff; border: 1px solid #1f6feb; }
+    .badge-warning { background: rgba(210, 153, 34, 0.2); color: #d29922; border: 1px solid #9e6a03; }
+
+    /* GPS Info Cards */
+    .stat-box {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-bright);
+      margin: 4px 0;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Terminal Console */
+    .terminal-box {
+      background: #090d13;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      height: 480px;
+      display: flex;
+      flex-direction: column;
+    }
+    .terminal-logs {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      color: #7ee787;
+      white-space: pre-wrap;
+      word-break: break-all;
+      line-height: 1.5;
+    }
+    .terminal-input-bar {
+      display: flex;
+      border-top: 1px solid var(--border);
+      background: #161b22;
+    }
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 10px 14px;
+      color: var(--text-bright);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+    .terminal-send-btn {
+      background: var(--accent);
+      border: none;
+      color: #000;
+      padding: 0 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Actions Grid */
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    /* Welcome Landing Screen */
+    .welcome-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 40px 20px;
+      text-align: center;
+      background: radial-gradient(circle at 50% 30%, #152238 0%, #0d1117 70%);
+      overflow-y: auto;
+    }
+    .welcome-logo-box {
+      margin-bottom: 24px;
+      position: relative;
+    }
+    .welcome-logo-svg {
+      width: 120px;
+      height: 120px;
+      filter: drop-shadow(0 0 25px rgba(57, 197, 187, 0.45));
+      animation: floatPlane 4s ease-in-out infinite;
+    }
+    @keyframes floatPlane {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(1deg); }
+    }
+    .welcome-title {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, #f0f6fc 30%, #58a6ff 70%, #39c5bb 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .welcome-subtitle {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 580px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+    .btn-hero {
+      padding: 16px 40px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #238636, #2ea043);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 25px rgba(46, 160, 67, 0.5);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-hero:hover {
+      transform: scale(1.04);
+      box-shadow: 0 0 35px rgba(46, 160, 67, 0.7);
+      background: linear-gradient(135deg, #2ea043, #3fb950);
+    }
+    .welcome-features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      max-width: 880px;
+      width: 100%;
+      margin-top: 40px;
+    }
+    .feat-card {
+      background: rgba(22, 27, 34, 0.75);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+      text-align: left;
+    }
+    .feat-icon {
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+    .feat-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-bright);
+      margin-bottom: 4px;
+    }
+    .feat-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">▲ VANIFLIGHT</div>
+      <div class="logo-title">Configurator</div>
+      <div class="logo-badge" id="fwBadge">v0.5.0</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-warning" id="btnSaveHeader" style="display:none;" onclick="sendCmd('w')">💾 SAVE</button>
+      <button class="btn btn-danger" id="btnRebootHeader" style="display:none;" onclick="sendCmd('x')">🔄 REBOOT</button>
+
+      <!-- Panel Koneksi Port Serial -->
+      <div class="inav-conn-panel">
+        <div class="inav-port-controls">
+          <div class="inav-select-row">
+            <select id="portSelect" class="inav-select inav-port-select" onchange="onPortSelectChange()" title="Pilih Port USB Flight Controller">
+              <option value="request">➕ Pilih Port USB Baru...</option>
+            </select>
+            <select id="baudSelect" class="inav-select inav-baud-select" onchange="onBaudSelectChange()" title="Baud Rate Serial">
+              <option value="115200" selected>115200</option>
+              <option value="230400">230400</option>
+              <option value="57600">57600</option>
+              <option value="9600">9600</option>
+            </select>
+          </div>
+          <div class="inav-sub-row">
+            <div style="display:inline-flex; align-items:center; gap:6px;">
+              <span class="status-dot" id="statusDot"></span>
+              <span id="connLabel" style="font-weight:600; color: var(--text-muted);">Terputus</span>
+            </div>
+            <label class="inav-autoconnect-label" title="Otomatis hubungkan saat port USB dicolok atau halaman dibuka">
+              <input type="checkbox" id="autoConnectChk" checked onchange="onAutoConnectChange()">
+              <span>Auto-Connect</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tombol Bulat Koneksi USB (Hijau = Connect, Merah = Disconnect) -->
+        <div class="inav-usb-btn-wrap" id="btnConnect" onclick="toggleConnect()" title="Hubungkan / Putuskan Koneksi Flight Controller">
+          <button type="button" class="inav-usb-circle" aria-label="Connect / Disconnect">
+            <!-- Ikon USB Saat Belum Terhubung -->
+            <svg id="usbIconConnect" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 2v4M15 2v4"/>
+              <rect x="8" y="2" width="8" height="4" rx="0.5"/>
+              <rect x="6" y="6" width="12" height="10" rx="2.5" fill="currentColor" stroke="none"/>
+              <path d="M12 9v4M10 11h4" stroke="#238636" stroke-width="2.2"/>
+              <path d="M12 16v6"/>
+            </svg>
+            <!-- Ikon USB Silang (X) Saat Terhubung -->
+            <svg id="usbIconDisconnect" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <path d="M9 2v4M15 2v4"/>
+              <rect x="8" y="2" width="8" height="4" rx="0.5"/>
+              <rect x="6" y="6" width="12" height="10" rx="2.5" fill="currentColor" stroke="none"/>
+              <path d="M9.8 8.8l4.4 4.4M14.2 8.8l-4.4 4.4" stroke="#d91b22" stroke-width="2.3"/>
+              <path d="M12 16v6"/>
+            </svg>
+          </button>
+          <span class="inav-usb-caption" id="btnConnectText">Connect</span>
+        </div>
+      </div>
+    </div>
+  </header>
+  <div id="toastBanner" class="toast-banner" role="status" aria-live="polite"></div>
+
+  <!-- WELCOME LANDING VIEW (Saat Belum Terhubung) -->
+  <div class="welcome-container" id="welcomeView">
+    <div class="welcome-logo-box">
+      <svg class="welcome-logo-svg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M100 20 L185 155 L140 145 L100 135 L60 145 L15 155 Z" fill="url(#wingGrad)" stroke="#39c5bb" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M100 20 L100 135" stroke="#58a6ff" stroke-width="3"/>
+        <path d="M100 45 L118 115 L100 128 L82 115 Z" fill="#39c5bb" fill-opacity="0.3" stroke="#39c5bb" stroke-width="2"/>
+        <defs>
+          <linearGradient id="wingGrad" x1="100" y1="20" x2="100" y2="160" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#1f2937"/>
+            <stop offset="1" stop-color="#111827"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+
+    <h1 class="welcome-title">VANIFLIGHT</h1>
+    <p class="welcome-subtitle">
+      Autonomous Flying Wing &amp; Tailsitter VTOL Flight Controller<br>
+      <span style="font-size: 13px; color: var(--accent);">Hardware: VANIFLIGHT V1.0 (RP2040-Zero) &bull; Firmware: v0.5.0</span>
+    </p>
+
+    <button class="btn-hero" onclick="toggleConnect()">
+      🔌 CONNECT TO FLIGHT CONTROLLER
+    </button>
+    <div style="font-size: 12px; color: var(--text-muted); margin-top: 14px;">
+      Hubungkan kabel USB-C ke komputer lalu klik tombol Connect di atas.
+    </div>
+
+    <div class="welcome-features">
+      <div class="feat-card">
+        <div class="feat-icon">📐</div>
+        <div class="feat-title">500Hz Madgwick AHRS</div>
+        <div class="feat-desc">Sensor Fusion MPU6050 6-DOF Quaternion bebas gimbal lock.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🛰️</div>
+        <div class="feat-title">Auto-RTH &amp; Loiter</div>
+        <div class="feat-desc">Navigasi otonom pulang u-blox M10 GPS @ 230400 baud biner.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🎮</div>
+        <div class="feat-title">Multi-Protokol Serial</div>
+        <div class="feat-desc">Mendukung FlySky iBUS, FrSky SBUS, dan ExpressLRS CRSF.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">⚡</div>
+        <div class="feat-title">Phase-Staggered PWM</div>
+        <div class="feat-desc">Dual-Core RP2040 133MHz dengan PWM hardware bebas jitter.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION BODY (Aktif Setelah Terhubung) -->
+  <div class="app-body" id="appBody" style="display:none;">
+    <!-- Sidebar Tabs -->
+    <nav class="sidebar">
+      <div class="nav-item active" onclick="switchTab('setup')">✈️ Setup & 3D</div>
+      <div class="nav-item" onclick="switchTab('receiver')">🎮 Receiver (RC)</div>
+      <div class="nav-item" onclick="switchTab('servos')">⚙️ Servos & Motor</div>
+      <div class="nav-item" onclick="switchTab('gps')">🛰️ GPS & Nav</div>
+      <div class="nav-item" onclick="switchTab('cli')">💻 CLI Terminal</div>
+    </nav>
+
+    <!-- Main Content Tab Views -->
+    <main class="content">
+
+      <!-- TAB 1: SETUP & 3D ATTITUDE -->
+      <div class="tab-pane active" id="tab-setup">
+        <div class="grid-2">
+          <!-- 3D Aircraft Model -->
+          <div class="card" style="margin-bottom:0;">
+            <div class="card-title">
+              <span>Orientasi Sikap Pesawat (3D Attitude)</span>
+              <span class="badge badge-info" id="armBadge">DISARMED</span>
+            </div>
+            <div class="canvas-container">
+              <canvas id="modelCanvas"></canvas>
+              <div class="canvas-overlay">
+                <div>Roll &nbsp;: <span class="val-cyan" id="dispRoll">0.0°</span></div>
+                <div>Pitch : <span class="val-yellow" id="dispPitch">0.0°</span></div>
+                <div>Yaw &nbsp;&nbsp;: <span class="val-purple" id="dispYaw">—</span></div>
+              </div>
+            </div>
+            <p id="yawStatus" role="status" style="font-size:12px;color:var(--warning);margin-top:8px;line-height:1.5;">Menunggu data sikap dari board.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 11px; color: var(--text-muted);">
+                🖱️ Drag: putar bebas • Dobel klik: reset view
+              </span>
+              <div style="display: flex; gap: 8px;">
+                <button id="btnCalibLevel" class="btn btn-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 600;" onclick="calibrateLevelAction()" title="Kalibrasi Gyro & Titik Datar Level di Hardware FC">
+                  🎯 Calibrate Level
+                </button>
+                <button id="btnResetYaw" class="btn btn-outline" style="padding: 6px 14px; font-size: 12px; font-weight: 600;" onclick="resetZAxis()" title="Nolkan arah hadap sumbu Yaw pesawat ke lurus (0°)" disabled>
+                  🔄 Reset Z axis
+                </button>
+                <button id="btnResetView" class="btn btn-outline" style="padding: 6px 14px; font-size: 12px; font-weight: 600;" onclick="reset3DView()" title="Reset kamera 3D & luruskan tampilan pesawat ke tengah">
+                  📷 Reset View
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions & Calibration -->
+          <div>
+            <div class="card">
+              <div class="card-title">Kalibrasi & Pengaturan Titik Datar</div>
+              <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+                Letakkan pesawat di meja datar sempurna dalam sikap terbang jelajah (level flight), lalu klik tombol di bawah untuk mengunci titik nol derajat.
+              </p>
+              <div class="action-grid">
+                <button class="btn btn-primary" style="padding: 12px;" onclick="sendCmd('c')">
+                  🎯 Calibrate Level
+                </button>
+                <button class="btn btn-outline" style="padding: 12px;" onclick="sendCmd('z')">
+                  🧹 Reset Trim ke 0
+                </button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Status Sensor & Sistem</div>
+              <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Sensor IMU (MPU6050)</span>
+                  <span class="badge badge-success" id="imuBadge">TERHUBUNG</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Sensor Barometer (BMP280)</span>
+                  <span class="badge badge-warning" id="baroBadge">CHECKING...</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Modul GPS (RushFPV M10)</span>
+                  <span class="badge badge-success" id="gpsBadge">TERHUBUNG</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Mode Terbang Aktif</span>
+                  <span class="badge badge-info" id="modeBadge">MANUAL</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Pre-Arm Safety Check</span>
+                  <span class="badge badge-warning" id="prearmBadge">CHECKING...</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Perintah Cepat Sistem</div>
+              <div class="action-grid">
+                <button class="btn btn-outline" id="btnPrearmBypass" onclick="sendCmd('a')" title="Lewati sementara cek GPS 3D Fix & Kemiringan >35° (Throttle & Failsafe tetap wajib aman)">🛡️ Bypass GPS/Tilt: OFF</button>
+                <button class="btn btn-outline" onclick="sendCmd('v')">🔊 Uji Beeper</button>
+                <button class="btn btn-outline" onclick="sendCmd('b')">⚡ DFU Flash Mode</button>
+                <button class="btn btn-outline" onclick="activateEsp32Bridge()" title="Jembatan USB-to-UART via GP28/GP29 untuk Flash ESP32-C3 tanpa kabel USB kedua">📡 ESP32 Flash Bridge</button>
+                <button class="btn btn-outline" onclick="sendCmd('h')">📋 Refresh Status</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: RECEIVER (RC INPUT) -->
+      <div class="tab-pane" id="tab-receiver">
+        <div class="card">
+          <div class="card-title">
+            <span>Monitor Sinyal Receiver (CH1 .. CH6)</span>
+            <span class="badge badge-success" id="rcSignalBadge">SINYAL TERDETEKSI</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+            <div>
+              <!-- CH1 Roll -->
+              <div class="channel-row">
+                <div class="channel-header">
+                  <span>CH1 - Roll (Aileron)</span>
+                  <span id="txtCh1" style="font-weight: 700;">1500 µs</span>
+                </div>
+                <div class="bar-bg">
+                  <div class="bar-fill" id="barCh1"></div>
+                  <div class="bar-center"></div>
+                  <div class="bar-label">ROLL</div>
+                </div>
+              </div>
+
+              <!-- CH2 Pitch -->
+              <div class="channel-row">
+                <div class="channel-header">
+                  <span>CH2 - Pitch (Elevator)</span>
+                  <span id="txtCh2" style="font-weight: 700;">1500 µs</span>
+                </div>
+                <div class="bar-bg">
+                  <div class="bar-fill" id="barCh2"></div>
+                  <div class="bar-center"></div>
+                  <div class="bar-label">PITCH</div>
+                </div>
+              </div>
+
+              <!-- CH3 Throttle -->
+              <div class="channel-row">
+                <div class="channel-header">
+                  <span>CH3 - Throttle (Gas)</span>
+                  <span id="txtCh3" style="font-weight: 700;">1000 µs</span>
+                </div>
+                <div class="bar-bg">
+                  <div class="bar-fill" id="barCh3" style="width: 0%;"></div>
+                  <div class="bar-label">THROTTLE</div>
+                </div>
+              </div>
+
+              <!-- Switches -->
+              <div class="grid-2" style="margin-top: 16px;">
+                <div class="channel-row">
+                  <div class="channel-header">
+                    <span>CH7 (SwA) - RTH Pulang</span>
+                    <span id="txtSwA">1000 µs</span>
+                  </div>
+                  <div class="bar-bg">
+                    <div class="bar-fill" id="barSwA" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <div class="channel-row">
+                  <div class="channel-header">
+                    <span>CH8 (SwB) - Arming Motor</span>
+                    <span id="txtSwB">1000 µs</span>
+                  </div>
+                  <div class="bar-bg">
+                    <div class="bar-fill" id="barSwB" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <div class="channel-row">
+                  <div class="channel-header">
+                    <span>CH9 (SwC) - Mode Terbang</span>
+                    <span id="txtSwC">1500 µs</span>
+                  </div>
+                  <div class="bar-bg">
+                    <div class="bar-fill" id="barSwC"></div>
+                  </div>
+                </div>
+                <div class="channel-row">
+                  <div class="channel-header">
+                    <span>CH10 (SwD) - AutoTrim</span>
+                    <span id="txtSwD">1000 µs</span>
+                  </div>
+                  <div class="bar-bg">
+                    <div class="bar-fill" id="barSwD" style="width: 0%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Protocol & Mapping Settings -->
+            <div>
+              <div style="background:#0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 14px;">
+                <h4 style="font-size: 13px; color: var(--text-bright); margin-bottom: 10px;">Pengaturan Protokol Serial</h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+                  Ubah protokol serial receiver tanpa perlu compile ulang. Mendukung FlySky iBUS, FrSky SBUS, & ELRS CRSF.
+                </p>
+                <div style="font-size: 13px; margin-bottom: 14px;">
+                  Protokol Aktif: <strong id="lblProtocol" style="color:var(--accent);">FrSky SBUS</strong>
+                </div>
+                <button class="btn btn-outline" style="width: 100%; margin-bottom: 8px;" onclick="cycleProtocol()">
+                  🔄 Ganti Protokol Receiver (i)
+                </button>
+                <button class="btn btn-primary" style="width: 100%;" onclick="sendCmd('w')">
+                  💾 Simpan ke EEPROM (w)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: SERVOS & MOTOR -->
+      <div class="tab-pane" id="tab-servos">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">Output Elevon Sayap (Mixer Elevon)</div>
+            
+            <div class="channel-row" style="margin-top: 14px;">
+              <div class="channel-header">
+                <span>Servo Sayap Kiri (S3 / GP3)</span>
+                <span id="txtSrvL" style="font-weight: 700;">1500 µs</span>
+              </div>
+              <div class="bar-bg">
+                <div class="bar-fill" id="barSrvL" style="background: linear-gradient(90deg, #8957e5, #bc8cff);"></div>
+                <div class="bar-center"></div>
+              </div>
+              <div style="margin-top: 8px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size: 12px; color: var(--text-muted);">Arah Gerak: <strong id="lblDirL" style="color:var(--text-bright);">NORMAL</strong></span>
+                <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="sendCmd('1')">Balik Arah Kiri [1]</button>
+              </div>
+            </div>
+
+            <div class="channel-row" style="margin-top: 24px;">
+              <div class="channel-header">
+                <span>Servo Sayap Kanan (S4 / GP2)</span>
+                <span id="txtSrvR" style="font-weight: 700;">1500 µs</span>
+              </div>
+              <div class="bar-bg">
+                <div class="bar-fill" id="barSrvR" style="background: linear-gradient(90deg, #8957e5, #bc8cff);"></div>
+                <div class="bar-center"></div>
+              </div>
+              <div style="margin-top: 8px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size: 12px; color: var(--text-muted);">Arah Gerak: <strong id="lblDirR" style="color:var(--text-bright);">REVERSE</strong></span>
+                <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="sendCmd('2')">Balik Arah Kanan [2]</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Output Motor ESC (S1 / GP0)</div>
+            <div class="channel-row" style="margin-top: 14px;">
+              <div class="channel-header">
+                <span>Sinyal Motor ESC</span>
+                <span id="txtEsc" style="font-weight: 700;">1000 µs</span>
+              </div>
+              <div class="bar-bg">
+                <div class="bar-fill" id="barEsc" style="background: linear-gradient(90deg, #d29922, #f0883e); width: 0%;"></div>
+              </div>
+            </div>
+
+            <div style="background: rgba(210, 153, 34, 0.1); border: 1px solid rgba(210, 153, 34, 0.3); border-radius: 6px; padding: 12px; margin-top: 20px; font-size: 12px; color: #e3b341; line-height: 1.5;">
+              ⚠️ <strong>PERINGATAN KESELAMATAN:</strong><br>
+              Lepas baling-baling (propeller) sebelum menguji gerakan stik atau mengaktifkan saklar Arm di dalam ruangan!
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: GPS & NAVIGATION -->
+      <div class="tab-pane" id="tab-gps">
+        <div class="grid-3" style="margin-bottom: 20px;">
+          <div class="stat-box">
+            <div class="stat-label">Satelit Terkunci</div>
+            <div class="stat-number val-cyan" id="gpsSats">9</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Min. 5 untuk Home Lock</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Status GPS Lock</div>
+            <div class="stat-number val-yellow" id="gpsFix" style="font-size: 20px; margin-top:8px;">3D LOCKED</div>
+            <div style="font-size: 11px; color: #3fb950;">Akurasi Tinggi</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Jarak Menuju Home</div>
+            <div class="stat-number val-purple" id="gpsHomeDist">3.9 m</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Titik Lepas Landas</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>Koordinat Posisi & Telemetri Navigasi</span>
+            <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="sendCmd('g')">🔄 Ambil Snapshot Data</button>
+          </div>
+          
+          <div class="grid-2" style="font-size: 14px; margin-top: 10px; line-height: 2;">
+            <div>
+              <div>Latitude &nbsp;&nbsp;: <strong id="gpsLat" style="color:var(--text-bright);">-7.827045°</strong></div>
+              <div>Longitude : <strong id="gpsLon" style="color:var(--text-bright);">110.337318°</strong></div>
+              <div>Ketinggian: <strong id="gpsAlt" style="color:var(--text-bright);">84.6 m MSL</strong></div>
+            </div>
+            <div>
+              <div>Kecepatan Ground &nbsp;: <strong id="gpsSpeed" style="color:var(--text-bright);">0.3 km/h</strong></div>
+              <div>Baudrate UART GPS &nbsp;: <strong style="color:var(--accent);">230400 baud (UBX-NAV-PVT)</strong></div>
+              <div style="margin-top: 8px;">
+                <a id="btnMapLink" href="https://maps.google.com/?q=-7.827045,110.337318" target="_blank" class="btn btn-primary" style="font-size: 12px; padding: 6px 12px; text-decoration: none;">
+                  🗺️ Buka Titik di Google Maps
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LEAFLET REAL-TIME MAP -->
+        <div class="card" style="margin-top: 20px;">
+          <div class="card-title">
+            <span>Peta Navigasi Real-Time (Leaflet / OpenStreetMap)</span>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="centerMapOnPlane()">🎯 Ikuti Pesawat</button>
+              <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="clearFlightPath()">🧹 Hapus Jejak</button>
+            </div>
+          </div>
+          <div id="mapContainer" style="height: 380px; width: 100%; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); background: #090d13;"></div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px; display:flex; justify-content:space-between; align-items:center;">
+            <span>🟢 Ikon Pesawat: Posisi Terkini &bull; 🏠 Ikon Rumah: Titik Home (RTH)</span>
+            <span id="mapCoords" style="color: var(--accent); font-weight: 600;">Koordinat: -7.827045, 110.337318</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: CLI TERMINAL -->
+      <div class="tab-pane" id="tab-cli">
+        <div class="terminal-box">
+          <div class="terminal-logs" id="termLogs">VANIFLIGHT CLI Terminal siap. Klik CONNECT untuk mulai streaming telemetri...</div>
+          <div class="terminal-input-bar">
+            <input type="text" class="terminal-input" id="termInput" placeholder="Ketik perintah (contoh: c, w, x, g, i, r, h, spasi) lalu Enter..." onkeydown="if(event.key==='Enter') sendTermInput()">
+            <button class="terminal-send-btn" onclick="sendTermInput()">KIRIM</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // Global State
+    let port = null;
+    let reader = null;
+    let writer = null;
+    let keepReading = false;
+    let textBuffer = '';
+
+    // Flight Controller Telemetry State
+    const fcState = {
+      roll: 0.0,
+      pitch: 0.0,
+      yaw: 0.0,
+      yawAvailable: false,
+      attitudeReceived: false,
+      rc: { ch1: 1500, ch2: 1500, ch3: 1000, swA: 1000, swB: 1000, swC: 1500, swD: 1000 },
+      servos: { left: 1500, right: 1500, esc: 1000, dirL: 'NORMAL', dirR: 'REVERSE' },
+      gps: { sats: 9, fix: '3D LOCKED', lat: -7.827045, lon: 110.337318, alt: 84.6, speed: 0.3, homeDist: 3.9 },
+      mode: 'MANUAL',
+      armed: false,
+      failsafe: true,
+      prearmStatus: 'CHECKING',
+      prearmBypass: false,
+      protocol: 'FrSky SBUS'
+    };
+
+    // Tab Navigation
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      
+      const targetPane = document.getElementById('tab-' + tabId);
+      if (targetPane) targetPane.classList.add('active');
+
+      const tabs = ['setup', 'receiver', 'servos', 'gps', 'cli'];
+      const idx = tabs.indexOf(tabId);
+      if (idx >= 0) {
+        document.querySelectorAll('.nav-item')[idx].classList.add('active');
+      }
+
+      if (tabId === 'setup') {
+        initThreeScene();
+        setTimeout(resizeCanvas, 100);
+      }
+
+      if (tabId === 'gps') {
+        initMap();
+        setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, 150);
+        sendCmd('g', false);
+      }
+    }
+
+    // Daftar port Web Serial yang sudah pernah diizinkan oleh pengguna (tersimpan otomatis oleh browser)
+    let authorizedPorts = [];
+    let toastTimer = null;
+
+    function showToast(msg, borderColor = 'var(--accent)') {
+      const banner = document.getElementById('toastBanner');
+      if (!banner) return;
+      banner.textContent = msg;
+      banner.style.borderLeftColor = borderColor;
+      banner.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.remove('show');
+      }, 3200);
+    }
+
+    function formatPortLabel(p, index) {
+      const info = (p && typeof p.getInfo === 'function') ? p.getInfo() : {};
+      const vid = info.usbVendorId ? info.usbVendorId.toString(16).toUpperCase().padStart(4, '0') : null;
+      const pid = info.usbProductId ? info.usbProductId.toString(16).toUpperCase().padStart(4, '0') : null;
+
+      if (info.usbVendorId === 0x2e8a) {
+        return `usbmodem (RP2040-Zero ${vid}:${pid || '000A'})`;
+      }
+      if (info.usbVendorId === 0x0483) {
+        return `usbmodem (STM32 VCP ${vid}:${pid || '5740'})`;
+      }
+      if (info.usbVendorId === 0x10c4 || info.usbVendorId === 0x1a86) {
+        return `usbserial (UART Bridge ${vid}:${pid || '0000'})`;
+      }
+      if (vid && pid) {
+        return `Port USB #${index + 1} (VID:${vid} PID:${pid})`;
+      }
+      return `Port Serial Tersimpan #${index + 1}`;
+    }
+
+    function getPortKey(p) {
+      const info = (p && typeof p.getInfo === 'function') ? p.getInfo() : {};
+      return `${info.usbVendorId || 0}:${info.usbProductId || 0}`;
+    }
+
+    async function refreshAuthorizedPorts(preferredPort = null) {
+      const selectEl = document.getElementById('portSelect');
+      if (!selectEl || !('serial' in navigator)) return [];
+
+      try {
+        authorizedPorts = await navigator.serial.getPorts();
+      } catch (e) {
+        authorizedPorts = [];
+      }
+
+      const savedKey = localStorage.getItem('vaniflight_last_port_key') || '';
+      selectEl.innerHTML = '';
+
+      let selectedIndex = -1;
+      authorizedPorts.forEach((p, idx) => {
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        opt.textContent = formatPortLabel(p, idx);
+        selectEl.appendChild(opt);
+
+        if (preferredPort && p === preferredPort) {
+          selectedIndex = idx;
+        } else if (selectedIndex === -1 && savedKey && getPortKey(p) === savedKey) {
+          selectedIndex = idx;
+        }
+      });
+
+      const addOpt = document.createElement('option');
+      addOpt.value = 'request';
+      addOpt.textContent = authorizedPorts.length > 0
+        ? '➕ Pilih / Tambah Port USB Lain...'
+        : '➕ Pilih Port USB Baru...';
+      selectEl.appendChild(addOpt);
+
+      if (authorizedPorts.length > 0) {
+        if (selectedIndex < 0) selectedIndex = 0;
+        selectEl.value = String(selectedIndex);
+      } else {
+        selectEl.value = 'request';
+      }
+
+      return authorizedPorts;
+    }
+
+    async function onPortSelectChange() {
+      const selectEl = document.getElementById('portSelect');
+      if (!selectEl) return;
+      if (selectEl.value === 'request') {
+        // Langsung buka dialog pilih port baru sekali saja, lalu simpan
+        if (port) await disconnectPort();
+        await connectPort(true);
+      } else {
+        const idx = parseInt(selectEl.value, 10);
+        if (authorizedPorts[idx]) {
+          localStorage.setItem('vaniflight_last_port_key', getPortKey(authorizedPorts[idx]));
+        }
+      }
+    }
+
+    function onBaudSelectChange() {
+      const baudEl = document.getElementById('baudSelect');
+      if (baudEl) {
+        localStorage.setItem('vaniflight_baud', baudEl.value);
+      }
+    }
+
+    function onAutoConnectChange() {
+      const chk = document.getElementById('autoConnectChk');
+      if (chk) {
+        localStorage.setItem('vaniflight_autoconnect', chk.checked ? '1' : '0');
+      }
+    }
+
+    // Muat preferensi & auto-connect saat halaman dibuka jika port sudah pernah diizinkan sebelumnya
+    window.addEventListener('DOMContentLoaded', async () => {
+      const savedBaud = localStorage.getItem('vaniflight_baud');
+      const baudEl = document.getElementById('baudSelect');
+      if (savedBaud && baudEl) baudEl.value = savedBaud;
+
+      const savedAuto = localStorage.getItem('vaniflight_autoconnect');
+      const autoChk = document.getElementById('autoConnectChk');
+      if (savedAuto !== null && autoChk) {
+        autoChk.checked = (savedAuto === '1');
+      }
+
+      if ('serial' in navigator) {
+        const ports = await refreshAuthorizedPorts();
+        if (ports.length > 0 && (!autoChk || autoChk.checked)) {
+          logToTerminal('[SYSTEM] Menemukan port tersimpan di dropdown. Mencoba auto-connect...\n');
+          await connectPort(false);
+        }
+
+        // Deteksi otomatis saat kabel USB disambungkan (Hot-Plug)
+        navigator.serial.addEventListener('connect', async (event) => {
+          await refreshAuthorizedPorts(event.target);
+          showToast('🔌 Perangkat USB Flight Controller terdeteksi!', '#3fb950');
+          const chk = document.getElementById('autoConnectChk');
+          if (!port && (!chk || chk.checked)) {
+            setTimeout(() => connectPort(false), 250);
+          }
+        });
+
+        // Deteksi otomatis saat kabel USB dicabut
+        navigator.serial.addEventListener('disconnect', async (event) => {
+          if (port && (event.target === port || !port.readable)) {
+            await disconnectPort();
+            showToast('⚠️ Kabel USB Flight Controller terputus.', 'var(--warning)');
+          }
+          await refreshAuthorizedPorts();
+        });
+      }
+    });
+
+    // Web Serial Connection (Menggunakan port tersimpan tanpa dialog berulang)
+    async function toggleConnect() {
+      if (port) {
+        await disconnectPort();
+        return;
+      }
+      await connectPort(false);
+    }
+
+    async function connectPort(forcePopup = false) {
+      if (!('serial' in navigator)) {
+        showToast('Browser belum mendukung Web Serial API (Gunakan Chrome / Edge / Brave).', 'var(--danger)');
+        return;
+      }
+
+      const selectEl = document.getElementById('portSelect');
+      const baudEl = document.getElementById('baudSelect');
+      const baudRate = baudEl ? parseInt(baudEl.value, 10) || 115200 : 115200;
+
+      try {
+        await refreshAuthorizedPorts();
+
+        let chosenPort = null;
+        if (!forcePopup && selectEl && selectEl.value !== 'request') {
+          const idx = parseInt(selectEl.value, 10);
+          if (!isNaN(idx) && authorizedPorts[idx]) {
+            chosenPort = authorizedPorts[idx];
+          }
+        }
+        if (!chosenPort && !forcePopup && authorizedPorts.length > 0) {
+          chosenPort = authorizedPorts[0];
+        }
+
+        // Hanya buka dialog browser jika belum pernah ada port yang disimpan atau user pilih "Tambah Port Baru"
+        if (!chosenPort) {
+          chosenPort = await navigator.serial.requestPort();
+          await refreshAuthorizedPorts(chosenPort);
+        }
+
+        port = chosenPort;
+        localStorage.setItem('vaniflight_last_port_key', getPortKey(port));
+
+        if (!port.readable || !port.writable) {
+          await port.open({ baudRate: baudRate });
+        }
+
+        keepReading = true;
+        updateUIConnected(true);
+        logToTerminal(`[CONNECTED] Terhubung ke Flight Controller pada ${baudRate} baud!\n`);
+        showToast(`✅ Terhubung ke ${formatPortLabel(port, 0)} @ ${baudRate} baud`, '#3fb950');
+
+        writer = port.writable.getWriter();
+        readSerialLoop();
+        setTimeout(requestAttitudeStream, 250);
+      } catch (err) {
+        console.error('Connection error:', err);
+        // Jika user batal memilih di dialog pertama kali, kembalikan dropdown ke port yang ada
+        await refreshAuthorizedPorts();
+        if (err && err.name === 'NotFoundError') {
+          showToast('Pemilihan port USB dibatalkan.', 'var(--warning)');
+          return;
+        }
+        if (err.message && err.message.includes('already open') && port) {
+          try {
+            keepReading = true;
+            updateUIConnected(true);
+            writer = port.writable.getWriter();
+            readSerialLoop();
+            setTimeout(requestAttitudeStream, 250);
+            return;
+          } catch (e) {
+            console.error('Fallback error:', e);
+          }
+        }
+        port = null;
+        updateUIConnected(false);
+        showToast('Gagal menghubungkan port: ' + (err.message || err), 'var(--danger)');
+      }
+    }
+
+    async function disconnectPort() {
+      keepReading = false;
+      if (reader) {
+        try { await reader.cancel(); } catch (e) {}
+        try { reader.releaseLock(); } catch (e) {}
+        reader = null;
+      }
+      if (writer) {
+        try { await writer.close(); } catch (e) {}
+        try { writer.releaseLock(); } catch (e) {}
+        writer = null;
+      }
+      if (port) {
+        try {
+          await port.close();
+        } catch (e) {
+          console.warn('port.close() warning:', e);
+        }
+        port = null;
+      }
+      stopGpsPolling();
+      updateUIConnected(false);
+      logToTerminal('\n[DISCONNECTED] Port serial berhasil ditutup dengan bersih.\n');
+      showToast('🔌 Koneksi Flight Controller diputuskan.', 'var(--text-muted)');
+    }
+
+    // Live GPS Polling Timer
+    let gpsPollTimer = null;
+
+    function startGpsPolling() {
+      if (gpsPollTimer) clearInterval(gpsPollTimer);
+      // Polling periodik tiap 1000ms untuk GPS real-time (satelit, fix, koordinat, rth)
+      gpsPollTimer = setInterval(() => {
+        if (port && writer && keepReading) {
+          sendCmd('g', false); // Diam di latar belakang tanpa spamming terminal
+        }
+      }, 1000);
+    }
+
+    function stopGpsPolling() {
+      if (gpsPollTimer) {
+        clearInterval(gpsPollTimer);
+        gpsPollTimer = null;
+      }
+    }
+
+    function updateUIConnected(connected) {
+      textBuffer = '';
+      fcState.roll = 0;
+      fcState.pitch = 0;
+      fcState.yaw = 0;
+      fcState.yawAvailable = false;
+      fcState.attitudeReceived = false;
+      yawOffset = 0;
+      rollViewOffset = 0;
+      pitchViewOffset = 0;
+      updateUIElements();
+      const dot = document.getElementById('statusDot');
+      const label = document.getElementById('connLabel');
+      const btn = document.getElementById('btnConnect');
+      const btnText = document.getElementById('btnConnectText');
+      const iconConnect = document.getElementById('usbIconConnect');
+      const iconDisconnect = document.getElementById('usbIconDisconnect');
+      const portSelect = document.getElementById('portSelect');
+      const baudSelect = document.getElementById('baudSelect');
+      const welcomeView = document.getElementById('welcomeView');
+      const appBody = document.getElementById('appBody');
+      const btnSave = document.getElementById('btnSaveHeader');
+      const btnReboot = document.getElementById('btnRebootHeader');
+
+      if (connected) {
+        if (dot) dot.classList.add('connected');
+        if (label) {
+          label.textContent = 'Terhubung';
+          label.style.color = '#3fb950';
+        }
+        if (btn) btn.classList.add('connected');
+        if (btnText) btnText.textContent = 'Disconnect';
+        if (iconConnect) iconConnect.style.display = 'none';
+        if (iconDisconnect) iconDisconnect.style.display = 'block';
+        if (portSelect) portSelect.disabled = true;
+        if (baudSelect) baudSelect.disabled = true;
+
+        if (welcomeView) welcomeView.style.display = 'none';
+        if (appBody) appBody.style.display = 'flex';
+        if (btnSave) btnSave.style.display = 'inline-flex';
+        if (btnReboot) btnReboot.style.display = 'inline-flex';
+
+        switchTab('setup');
+        startGpsPolling();
+        setTimeout(() => {
+          initThreeScene();
+          resizeCanvas();
+          render3DModel();
+        }, 100);
+      } else {
+        if (dot) dot.classList.remove('connected');
+        if (label) {
+          label.textContent = 'Terputus';
+          label.style.color = 'var(--text-muted)';
+        }
+        if (btn) btn.classList.remove('connected');
+        if (btnText) btnText.textContent = 'Connect';
+        if (iconConnect) iconConnect.style.display = 'block';
+        if (iconDisconnect) iconDisconnect.style.display = 'none';
+        if (portSelect) portSelect.disabled = false;
+        if (baudSelect) baudSelect.disabled = false;
+
+        stopGpsPolling();
+        if (welcomeView) welcomeView.style.display = 'flex';
+        if (appBody) appBody.style.display = 'none';
+        if (btnSave) btnSave.style.display = 'none';
+        if (btnReboot) btnReboot.style.display = 'none';
+      }
+    }
+
+    async function requestAttitudeStream() {
+      if (!writer || !keepReading) return;
+      await sendCmd('h', false);
+      await sendCmd('r', false); // Restore attitude output if the CLI was paused or in Plotter mode.
+    }
+
+    async function sendCmd(str, log = true) {
+      if (!writer) {
+        if (log) showToast('⚠️ Belum terhubung ke FC! Klik tombol Connect terlebih dahulu.', 'var(--warning)');
+        return;
+      }
+      try {
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(str + '\n'));
+        if (log) logToTerminal(`> [Kirim]: ${str}\n`);
+      } catch (err) {
+        if (log) console.error('Send error:', err);
+      }
+    }
+
+    async function activateEsp32Bridge() {
+      if (!writer) {
+        showToast('⚠️ Hubungkan ke FC terlebih dahulu sebelum mengaktifkan ESP32 Bridge.', 'var(--warning)');
+        return;
+      }
+      await sendCmd('e');
+      showToast('📡 Mode ESP32 Flash Bridge aktif di GP28/GP29! Port dilepas agar siap untuk esptool.', '#bc8cff');
+      setTimeout(() => {
+        disconnectPort();
+      }, 350);
+    }
+
+    async function cycleProtocol() {
+      const lbl = document.getElementById('lblProtocol');
+      lbl.textContent = 'Mengganti...';
+      lbl.style.color = 'var(--warning)';
+      await sendCmd('i');
+      setTimeout(() => sendCmd('h'), 150);
+    }
+
+    function sendTermInput() {
+      const input = document.getElementById('termInput');
+      const val = input.value.trim();
+      if (!val) return;
+      sendCmd(val);
+      input.value = '';
+    }
+
+    function logToTerminal(msg) {
+      const logs = document.getElementById('termLogs');
+      logs.textContent += msg;
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    // Serial Stream Reader langsung tanpa pipeTo
+    async function readSerialLoop() {
+      reader = port.readable.getReader();
+      const decoder = new TextDecoder();
+
+      try {
+        while (keepReading) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            const text = decoder.decode(value, { stream: true });
+            logToTerminal(text);
+            parseIncomingTelemetry(text);
+          }
+        }
+      } catch (err) {
+        if (keepReading) console.error('Read loop error:', err);
+      } finally {
+        try { reader.releaseLock(); } catch(e) {}
+        reader = null;
+      }
+    }
+
+    // Parser for FC Telemetry Streams
+    function parseIncomingTelemetry(chunk) {
+      textBuffer += chunk;
+      let lines = textBuffer.split('\n');
+      textBuffer = lines.pop(); // Keep incomplete line
+
+      for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+
+        // Older firmware sends roll/pitch only. Missing yaw must never look like a measured zero.
+        const angle = '([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))';
+        let imuMatch = line.match(new RegExp('IMU\\[R:\\s*' + angle + '°?\\s+P:\\s*' + angle + '°?(?:\\s+Y:\\s*' + angle + '°?)?\\]'));
+        if (imuMatch) {
+          const roll = Number(imuMatch[1]);
+          const pitch = Number(imuMatch[2]);
+          const yaw = imuMatch[3] === undefined ? NaN : Number(imuMatch[3]);
+          if (Number.isFinite(roll) && Number.isFinite(pitch)) {
+            fcState.roll = roll;
+            fcState.pitch = pitch;
+            fcState.attitudeReceived = true;
+            fcState.yawAvailable = Number.isFinite(yaw);
+            if (fcState.yawAvailable) fcState.yaw = yaw;
+          }
+        }
+
+        // Parse RC Channels: RC -> CH1:1500 CH2:1500 CH3:1000
+        let rcMatch = line.match(/CH1:(\d+)\s+CH2:(\d+)\s+CH3:(\d+)/);
+        if (rcMatch) {
+          fcState.rc.ch1 = parseInt(rcMatch[1]);
+          fcState.rc.ch2 = parseInt(rcMatch[2]);
+          fcState.rc.ch3 = parseInt(rcMatch[3]);
+        }
+
+        // Parse Switches: SwA(RTH):1000 SwB(Arm):1000 SwC(Mode):1500 SwD(Trim):1000
+        let swMatch = line.match(/SwA\(RTH\):(\d+)\s+SwB\(Arm\):(\d+)\s+SwC\(Mode\):(\d+)\s+SwD\(Trim\):(\d+)/);
+        if (swMatch) {
+          fcState.rc.swA = parseInt(swMatch[1]);
+          fcState.rc.swB = parseInt(swMatch[2]);
+          fcState.rc.swC = parseInt(swMatch[3]);
+          fcState.rc.swD = parseInt(swMatch[4]);
+        }
+
+        // Parse Flight Mode: [MANUAL] / [ANGLE] / [ALT_HOLD] / [RTH]
+        let modeMatch = line.match(/\[(MANUAL|ANGLE|ACRO|ALT_HOLD|RTH)\]/);
+        if (modeMatch) {
+          fcState.mode = modeMatch[1];
+        }
+
+        // Parse Arm & Failsafe Status
+        if (line.includes('[NO RC SIGNAL')) {
+          fcState.failsafe = true;
+        } else if (line.includes('SRV[') || (line.includes('RC ->') && !line.includes('[NO RC SIGNAL'))) {
+          fcState.failsafe = false;
+        }
+
+        if (line.includes('ARMED') && !line.includes('DISARMED')) fcState.armed = true;
+        if (line.includes('DISARMED')) fcState.armed = false;
+
+        // Parse Pre-Arm Safety Check & Bypass Status
+        let prearmMatch = line.match(/PREARM\[([^\]]+)\]/);
+        if (prearmMatch) {
+          fcState.prearmStatus = prearmMatch[1].trim();
+        }
+        let bypassMatch = line.match(/BYPASS:(ON|OFF)/);
+        if (bypassMatch) {
+          fcState.prearmBypass = (bypassMatch[1] === 'ON');
+        }
+        if (line.includes('BYPASS GPS & TILT')) {
+          fcState.prearmBypass = true;
+        } else if (line.includes('STRICT AKTIF')) {
+          fcState.prearmBypass = false;
+        }
+
+        // Parse Sensor Status
+        if (line.includes('[IMU DISCONNECTED]') || line.includes('Status IMU    : TIDAK TERDETEKSI')) {
+          fcState.imuConnected = false;
+          fcState.yawAvailable = false;
+          fcState.attitudeReceived = false;
+        } else if (line.includes('IMU[R:') || line.includes('Status IMU    : TERHUBUNG')) {
+          fcState.imuConnected = true;
+        }
+        if (line.includes('Status Baro   : TERHUBUNG') || line.includes('[BARO] Status  : TERHUBUNG')) {
+          fcState.baroConnected = true;
+        } else if (line.includes('Status Baro   : TIDAK TERDETEKSI') || line.includes('[BARO] Status  : TIDAK TERDETEKSI')) {
+          fcState.baroConnected = false;
+        }
+
+        // Parse Servos: SRV[L:1500 R:1500 | Trim L:0 R:0] ESC:1000
+        let srvMatch = line.match(/SRV\[L:(\d+)\s+R:(\d+).*?\]\s+ESC:(\d+)/);
+        if (srvMatch) {
+          fcState.servos.left = parseInt(srvMatch[1]);
+          fcState.servos.right = parseInt(srvMatch[2]);
+          fcState.servos.esc = parseInt(srvMatch[3]);
+        }
+
+        // Parse Servo Directions
+        let dirMatch = line.match(/Arah Servo\s*:\s*Kiri=(\w+).*?Kanan=(\w+)/i);
+        if (dirMatch) {
+          fcState.servos.dirL = dirMatch[1].toUpperCase();
+          fcState.servos.dirR = dirMatch[2].toUpperCase();
+        }
+        let dirLMatch = line.match(/Arah Servo KIRI.*?diubah ke:\s*(\w+)/i);
+        if (dirLMatch) fcState.servos.dirL = dirLMatch[1].toUpperCase();
+        let dirRMatch = line.match(/Arah Servo KANAN.*?diubah ke:\s*(\w+)/i);
+        if (dirRMatch) fcState.servos.dirR = dirRMatch[1].toUpperCase();
+
+        // Parse GPS Diagnostics Snapshot
+        if (line.includes('Satelit:')) {
+          let satMatch = line.match(/Satelit:\s*(\d+)/);
+          if (satMatch) fcState.gps.sats = parseInt(satMatch[1]);
+          let fixMatch = line.match(/Fix\s*:\s*([^\|]+)/);
+          if (fixMatch) fcState.gps.fix = fixMatch[1].trim();
+          let altMatch = line.match(/Alt MSL:\s*([-\d\.]+)/);
+          if (altMatch) fcState.gps.alt = parseFloat(altMatch[1]);
+          let spdMatch = line.match(/Speed:\s*([-\d\.]+)/);
+          if (spdMatch) fcState.gps.speed = parseFloat(spdMatch[1]);
+        }
+
+        if (line.includes('Lat') && line.includes('Lon')) {
+          let posMatch = line.match(/Lat\s*([-\d\.]+)\s*\|\s*Lon\s*([-\d\.]+)\s*\|\s*Home:\s*([-\d\.]+)/);
+          if (posMatch) {
+            fcState.gps.lat = parseFloat(posMatch[1]);
+            fcState.gps.lon = parseFloat(posMatch[2]);
+            fcState.gps.homeDist = parseFloat(posMatch[3]);
+            updateMap(fcState.gps.lat, fcState.gps.lon);
+          }
+        }
+
+        // Parse Protocol
+        let protoMatch = line.match(/(?:Protokol RC|Protokol Receiver diubah LIVE ke)\s*:\s*(.+)/i);
+        if (protoMatch) {
+          fcState.protocol = protoMatch[1].trim();
+        }
+
+        // Tampilkan hasil kalibrasi dari FC langsung di status bar Tab 1
+        if (line.includes('Mengkalibrasi Gyro & Titik Datar')) {
+          showStatusBanner('⏳ Mengkalibrasi Gyro & Titik Datar... Jangan gerakkan pesawat!', 'var(--warning)', 3500);
+        } else if (line.includes('Kalibrasi selesai!')) {
+          rollViewOffset = 0;
+          pitchViewOffset = 0;
+          showStatusBanner('✅ ' + line.replace(/^\[OK\]\s*/, ''), '#3fb950', 4500);
+        } else if (line.includes('Kalibrasi Gyro ditolak') || line.includes('Kalibrasi Titik Datar ditolak')) {
+          showStatusBanner('⚠️ ' + line, 'var(--danger-hover)', 5000);
+        }
+      }
+
+      updateUIElements();
+    }
+
+    let statusBannerOverrideUntil = 0;
+    function showStatusBanner(msg, color = 'var(--accent)', durationMs = 2800) {
+      const yawStatus = document.getElementById('yawStatus');
+      if (!yawStatus) return;
+      statusBannerOverrideUntil = Date.now() + durationMs;
+      yawStatus.textContent = msg;
+      yawStatus.style.color = color;
+    }
+
+    // Refresh UI elements with live data
+    function updateUIElements() {
+      // Numbers
+      const currentRoll = fcState.roll - rollViewOffset;
+      const currentPitch = fcState.pitch - pitchViewOffset;
+      const currentYaw = normalizeDegrees(fcState.yaw - yawOffset);
+      document.getElementById('dispRoll').textContent = currentRoll.toFixed(1) + '°';
+      document.getElementById('dispPitch').textContent = currentPitch.toFixed(1) + '°';
+      document.getElementById('dispYaw').textContent = fcState.yawAvailable ? currentYaw.toFixed(1) + '°' : '—';
+      document.getElementById('btnResetYaw').disabled = !fcState.yawAvailable;
+      const yawStatus = document.getElementById('yawStatus');
+      if (Date.now() > statusBannerOverrideUntil) {
+        yawStatus.textContent = fcState.yawAvailable
+          ? 'Yaw relatif dari gyro; Reset Z axis menolkan arah hadap, Reset View mereset kamera & posisi 3D.'
+          : fcState.attitudeReceived
+            ? 'Data yaw tidak dikirim board. Pastikan firmware yang terpasang mengirim Y: pada telemetri IMU.'
+            : 'Menunggu data sikap dari board.';
+        yawStatus.style.color = fcState.yawAvailable ? 'var(--text-muted)' : 'var(--warning)';
+      }
+
+      // Badges
+      const armBadge = document.getElementById('armBadge');
+      armBadge.textContent = fcState.armed ? 'ARMED' : 'DISARMED';
+      armBadge.className = 'badge ' + (fcState.armed ? 'badge-danger' : 'badge-info');
+
+      document.getElementById('modeBadge').textContent = fcState.mode;
+
+      // Pre-Arm Safety Check Badge & Bypass Toggle Button
+      const prearmBadge = document.getElementById('prearmBadge');
+      if (prearmBadge) {
+        if (fcState.armed) {
+          prearmBadge.textContent = 'ARMED';
+          prearmBadge.className = 'badge badge-danger';
+        } else if (fcState.prearmStatus === 'OK') {
+          prearmBadge.textContent = fcState.prearmBypass ? 'READY (BYPASS)' : '✅ READY';
+          prearmBadge.className = 'badge badge-success';
+        } else if (fcState.prearmStatus === 'CHECKING') {
+          prearmBadge.textContent = 'CHECKING...';
+          prearmBadge.className = 'badge badge-warning';
+        } else {
+          prearmBadge.textContent = '⛔ ' + fcState.prearmStatus;
+          prearmBadge.className = 'badge badge-danger';
+        }
+      }
+      const btnBypass = document.getElementById('btnPrearmBypass');
+      if (btnBypass) {
+        btnBypass.textContent = fcState.prearmBypass ? '⚠️ Bypass GPS/Tilt: ON' : '🛡️ Bypass GPS/Tilt: OFF';
+        btnBypass.style.borderColor = fcState.prearmBypass ? 'var(--warning)' : '';
+        btnBypass.style.color = fcState.prearmBypass ? 'var(--warning)' : '';
+      }
+
+      // RC Bars (Mapping 1000-2000 µs to 0%-100%)
+      const calcPct = (us) => Math.max(0, Math.min(100, ((us - 1000) / 1000) * 100));
+
+      document.getElementById('barCh1').style.width = calcPct(fcState.rc.ch1) + '%';
+      document.getElementById('txtCh1').textContent = fcState.rc.ch1 + ' µs';
+
+      document.getElementById('barCh2').style.width = calcPct(fcState.rc.ch2) + '%';
+      document.getElementById('txtCh2').textContent = fcState.rc.ch2 + ' µs';
+
+      document.getElementById('barCh3').style.width = calcPct(fcState.rc.ch3) + '%';
+      document.getElementById('txtCh3').textContent = fcState.rc.ch3 + ' µs';
+
+      document.getElementById('barSwA').style.width = calcPct(fcState.rc.swA) + '%';
+      document.getElementById('txtSwA').textContent = fcState.rc.swA + ' µs';
+
+      document.getElementById('barSwB').style.width = calcPct(fcState.rc.swB) + '%';
+      document.getElementById('txtSwB').textContent = fcState.rc.swB + ' µs';
+
+      document.getElementById('barSwC').style.width = calcPct(fcState.rc.swC) + '%';
+      document.getElementById('txtSwC').textContent = fcState.rc.swC + ' µs';
+
+      document.getElementById('barSwD').style.width = calcPct(fcState.rc.swD) + '%';
+      document.getElementById('txtSwD').textContent = fcState.rc.swD + ' µs';
+
+      // Servos & Motor
+      document.getElementById('barSrvL').style.width = calcPct(fcState.servos.left) + '%';
+      document.getElementById('txtSrvL').textContent = fcState.servos.left + ' µs';
+
+      document.getElementById('barSrvR').style.width = calcPct(fcState.servos.right) + '%';
+      document.getElementById('txtSrvR').textContent = fcState.servos.right + ' µs';
+
+      document.getElementById('barEsc').style.width = calcPct(fcState.servos.esc) + '%';
+      document.getElementById('txtEsc').textContent = fcState.servos.esc + ' µs';
+
+      // GPS
+      document.getElementById('gpsSats').textContent = fcState.gps.sats;
+      document.getElementById('gpsFix').textContent = fcState.gps.fix;
+      document.getElementById('gpsHomeDist').textContent = fcState.gps.homeDist.toFixed(1) + ' m';
+      document.getElementById('gpsLat').textContent = fcState.gps.lat.toFixed(6) + '°';
+      document.getElementById('gpsLon').textContent = fcState.gps.lon.toFixed(6) + '°';
+      document.getElementById('gpsAlt').textContent = fcState.gps.alt.toFixed(1) + ' m MSL';
+      document.getElementById('gpsSpeed').textContent = fcState.gps.speed.toFixed(1) + ' km/h';
+
+      const mapUrl = `https://maps.google.com/?q=${fcState.gps.lat},${fcState.gps.lon}`;
+      document.getElementById('btnMapLink').href = mapUrl;
+
+      if (fcState.protocol) {
+        const lblProto = document.getElementById('lblProtocol');
+        lblProto.textContent = fcState.protocol;
+        lblProto.style.color = 'var(--accent)';
+      }
+
+      // Update Receiver Signal Status Badge
+      const sigBadge = document.getElementById('rcSignalBadge');
+      if (sigBadge) {
+        if (fcState.failsafe) {
+          sigBadge.textContent = 'NO RC SIGNAL';
+          sigBadge.className = 'badge badge-danger';
+        } else {
+          sigBadge.textContent = 'SINYAL TERDETEKSI (OK)';
+          sigBadge.className = 'badge badge-success';
+        }
+      }
+
+      // Update Servo Directions
+      const lblDirL = document.getElementById('lblDirL');
+      if (lblDirL) lblDirL.textContent = fcState.servos.dirL;
+      const lblDirR = document.getElementById('lblDirR');
+      if (lblDirR) lblDirR.textContent = fcState.servos.dirR;
+
+      // Update Sensor Badges
+      const imuBadge = document.getElementById('imuBadge');
+      if (imuBadge && fcState.imuConnected !== undefined) {
+        imuBadge.textContent = fcState.imuConnected ? 'TERHUBUNG' : 'DISCONNECTED';
+        imuBadge.className = 'badge ' + (fcState.imuConnected ? 'badge-success' : 'badge-danger');
+      }
+
+      const baroBadge = document.getElementById('baroBadge');
+      if (baroBadge && fcState.baroConnected !== undefined) {
+        baroBadge.textContent = fcState.baroConnected ? 'TERHUBUNG' : 'TIDAK TERDETEKSI';
+        baroBadge.className = 'badge ' + (fcState.baroConnected ? 'badge-success' : 'badge-warning');
+      }
+    }
+
+    // Leaflet Real-Time Map Logic (OpenStreetMap / CartoDB)
+    let map = null;
+    let planeMarker = null;
+    let homeMarker = null;
+    let flightPath = null;
+    let flightCoords = [];
+    let followPlane = true;
+
+    function initMap() {
+      if (map) return;
+      const container = document.getElementById('mapContainer');
+      if (!container) return;
+
+      try {
+        map = L.map('mapContainer', {
+          center: [fcState.gps.lat, fcState.gps.lon],
+          zoom: 16,
+          attributionControl: false
+        });
+
+        // OpenStreetMap Standard Tile Layer (Free & Reliable)
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        // Jejak rute terbang pesawat (polyline)
+        flightPath = L.polyline([], {
+          color: '#39c5bb',
+          weight: 3.5,
+          opacity: 0.85,
+          dashArray: '5, 6'
+        }).addTo(map);
+
+        // Marker Pesawat SVG
+        const planeHtml = `
+          <div id="planeSvgBox" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+            <svg viewBox="0 0 40 40" width="34" height="34" fill="none">
+              <path d="M20 3 L36 33 L20 27 L4 33 Z" fill="#0d1117" stroke="#39c5bb" stroke-width="2.5" stroke-linejoin="round"/>
+              <circle cx="20" cy="18" r="3.5" fill="#58a6ff"/>
+            </svg>
+          </div>
+        `;
+        const planeIcon = L.divIcon({
+          className: 'custom-plane-icon',
+          html: planeHtml,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18]
+        });
+        planeMarker = L.marker([fcState.gps.lat, fcState.gps.lon], { icon: planeIcon }).addTo(map);
+
+        // Marker Titik Home (RTH)
+        const homeHtml = `
+          <div style="width:30px;height:30px;background:rgba(240,136,62,0.25);border:2px solid #f0883e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 0 12px #f0883e;">
+            🏠
+          </div>
+        `;
+        const homeIcon = L.divIcon({
+          className: 'custom-home-icon',
+          html: homeHtml,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+        homeMarker = L.marker([fcState.gps.lat, fcState.gps.lon], { icon: homeIcon }).addTo(map);
+        homeMarker.bindPopup('<b>Titik Home (RTH)</b><br>Ketinggian Pulang: +40m AGL');
+
+        updateMap(fcState.gps.lat, fcState.gps.lon);
+      } catch (err) {
+        console.error('Error initializing Leaflet map:', err);
+      }
+    }
+
+    function updateMap(lat, lon) {
+      if (!map) return;
+      if (lat === 0 && lon === 0) return;
+
+      const pos = [lat, lon];
+      if (planeMarker) {
+        planeMarker.setLatLng(pos);
+      }
+
+      if (flightPath) {
+        flightCoords.push(pos);
+        if (flightCoords.length > 800) flightCoords.shift();
+        flightPath.setLatLngs(flightCoords);
+      }
+
+      if (followPlane) {
+        map.panTo(pos, { animate: true, duration: 0.5 });
+      }
+
+      const coordsEl = document.getElementById('mapCoords');
+      if (coordsEl) {
+        coordsEl.textContent = `Koordinat: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      }
+    }
+
+    function centerMapOnPlane() {
+      followPlane = true;
+      if (map && fcState.gps.lat && fcState.gps.lon) {
+        map.setView([fcState.gps.lat, fcState.gps.lon], 17, { animate: true });
+      }
+    }
+
+    function clearFlightPath() {
+      flightCoords = [];
+      if (flightPath) flightPath.setLatLngs([]);
+    }
+
+    // 3D Visualizer (Three.js WebGL with Realistic Flying Wing Model)
+    const canvas = document.getElementById('modelCanvas');
+    let renderer, scene, camera, planeModel, planeGroup;
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let cameraOrbit = { rotX: 0.40, rotY: 0.0, distance: 3.2 };
+    let yawOffset = 0;
+    let rollViewOffset = 0;
+    let pitchViewOffset = 0;
+
+    function normalizeDegrees(degrees) {
+      return ((degrees + 180) % 360 + 360) % 360 - 180;
+    }
+
+    function flashButtonFeedback(btnId, tempText, origText) {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.textContent = tempText;
+      btn.style.borderColor = '#3fb950';
+      btn.style.color = '#3fb950';
+      setTimeout(() => {
+        btn.textContent = origText;
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }, 1000);
+    }
+
+    function calibrateLevelAction() {
+      rollViewOffset = 0;
+      pitchViewOffset = 0;
+      showStatusBanner('⏳ Mengirim perintah Kalibrasi Level ke FC... Jangan gerakkan board!', 'var(--warning)', 3500);
+      sendCmd('c');
+    }
+
+    // Reset Z Axis (Menolkan sumbu yaw tampilan pesawat)
+    function resetZAxis() {
+      if (!fcState.yawAvailable) {
+        showStatusBanner('⚠️ Data yaw belum tersedia dari board.', 'var(--warning)', 3000);
+        logToTerminal('[3D] Data yaw belum tersedia; arah acuan belum dapat direset.\n');
+        return;
+      }
+      yawOffset = fcState.yaw;
+      updateUIElements();
+      render3DModel();
+      flashButtonFeedback('btnResetYaw', '✅ Yaw = 0.0°', '🔄 Reset Z axis');
+      showStatusBanner('✅ Sumbu Z (Yaw) berhasil dinolkan ke 0.0°!', '#3fb950', 2500);
+      logToTerminal('[3D] 🔄 Sumbu Z (Yaw Heading) dinolkan ke 0.0°\n');
+    }
+
+    // Reset View (Kembalikan Sudut Pandang Kamera 3D & Luruskan Tampilan 3D Pesawat)
+    function reset3DView() {
+      if (fcState.yawAvailable) {
+        yawOffset = fcState.yaw;
+      }
+      rollViewOffset = fcState.roll;
+      pitchViewOffset = fcState.pitch;
+
+      // Animasi kamera snap halus agar reaksi reset terlihat jelas di layar
+      cameraOrbit = { rotX: 0.40, rotY: 0.0, distance: 3.55 };
+      updateCameraPosition();
+      render3DModel();
+
+      const startDist = 3.55;
+      const targetDist = 3.2;
+      const startTime = performance.now();
+      function snapAnim(now) {
+        const t = Math.min(1, (now - startTime) / 180);
+        const ease = 1 - Math.pow(1 - t, 3);
+        cameraOrbit.distance = startDist + (targetDist - startDist) * ease;
+        updateCameraPosition();
+        render3DModel();
+        if (t < 1) requestAnimationFrame(snapAnim);
+      }
+      requestAnimationFrame(snapAnim);
+
+      updateUIElements();
+      flashButtonFeedback('btnResetView', '✅ View Direset!', '📷 Reset View');
+      showStatusBanner('📷 Kamera & tampilan 3D pesawat direset lurus ke tengah (0.0°)!', '#3fb950', 2800);
+      logToTerminal('[3D] 📷 Sudut kamera & orientasi tampilan 3D direset lurus menghadap depan.\n');
+    }
+
+    function initThreeScene() {
+      if (renderer) return;
+
+      const w = canvas.parentElement.clientWidth || 500;
+      const h = canvas.parentElement.clientHeight || 380;
+
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(window.devicePixelRatio || 1);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+      updateCameraPosition();
+
+      // Pencahayaan Studio Multi-Directional dengan Kontras 3D & Bayangan Aerodinamis
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+      scene.add(ambientLight);
+
+      const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0x0f172a, 0.5);
+      scene.add(hemiLight);
+
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      keyLight.position.set(6, 12, 8);
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
+      fillLight.position.set(-8, 3, 5);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0x0284c7, 0.5);
+      rimLight.position.set(0, -6, -7);
+      scene.add(rimLight);
+
+      // Group yang berputar mengikuti Pitch / Roll / Yaw dari Flight Controller
+      planeGroup = new THREE.Group();
+      scene.add(planeGroup);
+
+      // Muat Model 3D Asli dari flying-wing.3mf (format GLB)
+      const loader = new THREE.GLTFLoader();
+      loader.load('models/flying_wing.glb', function(gltf) {
+        planeModel = gltf.scene;
+
+        // Putar geometri 180° di sumbu Y agar moncong menghadap ke DEPAN (-Z, masuk ke layar)
+        // dan buntut menghadap pengguna (+Z), sehingga Kiri & Kanan konsisten (tidak reflektif)
+        planeModel.traverse(function(child) {
+          if (child.isMesh) {
+            if (child.geometry) {
+              child.geometry.rotateY(Math.PI);
+              child.geometry.computeVertexNormals();
+            }
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0x0284c7,       // Vibrant High-Tech Aero Blue (#0284c7)
+              roughness: 0.4,
+              metalness: 0.22,
+              side: THREE.DoubleSide
+            });
+          }
+        });
+
+        // Skala otomatis agar pas di layar
+        const box = new THREE.Box3().setFromObject(planeModel);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const targetScale = 2.1 / maxDim;
+        planeModel.scale.set(targetScale, targetScale, targetScale);
+
+        // Posisikan tepat di pusat koordinat rotasi (center of gravity)
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        planeModel.position.set(-center.x * targetScale, -center.y * targetScale, -center.z * targetScale);
+
+        planeGroup.add(planeModel);
+        render3DModel();
+      }, undefined, function(err) {
+        console.error('Gagal memuat models/flying_wing.glb:', err);
+      });
+
+      // Kontrol Mouse Drag (Putar sudut pandang kamera 3D sesuka hati)
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+      });
+      window.addEventListener('mouseup', () => { isDragging = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const deltaX = e.clientX - previousMousePosition.x;
+        const deltaY = e.clientY - previousMousePosition.y;
+
+        cameraOrbit.rotY -= deltaX * 0.008;
+        cameraOrbit.rotX = Math.max(-1.4, Math.min(1.4, cameraOrbit.rotX + deltaY * 0.008));
+
+        updateCameraPosition();
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+        render3DModel();
+      });
+
+      // Klik ganda untuk reset kamera ke sudut pandang semula
+      canvas.addEventListener('dblclick', () => {
+        reset3DView();
+      });
+
+      // Render loop interaktif 60fps
+      function animate() {
+        requestAnimationFrame(animate);
+        render3DModel();
+      }
+      requestAnimationFrame(animate);
+    }
+
+    function updateCameraPosition() {
+      if (!camera) return;
+      const x = cameraOrbit.distance * Math.cos(cameraOrbit.rotX) * Math.sin(cameraOrbit.rotY);
+      const y = cameraOrbit.distance * Math.sin(cameraOrbit.rotX);
+      const z = cameraOrbit.distance * Math.cos(cameraOrbit.rotX) * Math.cos(cameraOrbit.rotY);
+      camera.position.set(x, y, z);
+      camera.lookAt(0, 0, 0);
+    }
+
+    function resizeCanvas() {
+      if (!renderer || !camera) return;
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function render3DModel() {
+      if (!planeGroup) return;
+
+      // Update rotasi mengikuti orientasi fisik sensor IMU dengan offset tampilan
+      const currentPitch = fcState.pitch - pitchViewOffset;
+      const currentRoll  = fcState.roll - rollViewOffset;
+      const pitchRad = (currentPitch * Math.PI) / 180;
+      const rollRad  = (currentRoll * Math.PI) / 180;
+      const currentYaw = normalizeDegrees(fcState.yaw - yawOffset);
+      const yawRad   = (currentYaw * Math.PI) / 180;
+
+      // Basis Chase View (Moncong menghadap ke depan -Z, Sayap Kiri di -X, Sayap Kanan di +X, Atas di +Y):
+      // - Pitch positif (Nose Up)  -> +pitchRad memutar moncong (-Z) naik ke +Y dan ekor (+Z) turun ke -Y
+      // - Roll positif (Roll Kanan)-> -rollRad menaikkan sayap kiri (-X) ke +Y dan menurunkan sayap kanan (+X) ke -Y
+      // - Yaw positif (Belok Kanan)-> -yawRad memutar moncong (-Z) ke kanan (+X)
+      planeGroup.rotation.set(pitchRad, -yawRad, -rollRad, 'YXZ');
+
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    }
+
+    // Initial load
+    updateUIElements();
+  </script>
+</body>
+</html>

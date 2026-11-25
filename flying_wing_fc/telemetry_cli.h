@@ -84,6 +84,8 @@ public:
     Serial.print(F(" deg | Pitch="));
     Serial.print(imu.state.pitch_trim_deg, 2);
     Serial.println(F(" deg"));
+    Serial.print(F("   Pre-Arm Check : "));
+    Serial.println(settings.data.prearm_bypass ? F("BYPASS GPS & TILT (Cepat/Indoor)") : F("STRICT AKTIF (Cek GPS 3D, Tilt, & Throttle)"));
     Serial.println(F("------------------------------------------------------------"));
     Serial.println(F("MODE TAMPILAN (Ketik huruf lalu Enter):"));
     Serial.println(F("  [r] Mode Monitor Receiver (CH1..CH6)"));
@@ -94,16 +96,18 @@ public:
     Serial.println(F("  [i] Ganti Protokol Receiver (FlySky iBUS / ELRS CRSF / SBUS)"));
     Serial.println(F("  [1] Balik Arah (Reverse) Servo Sayap Kiri"));
     Serial.println(F("  [2] Balik Arah (Reverse) Servo Sayap Kanan"));
+    Serial.println(F("  [a] Toggle Pre-Arm Bypass (Lewati cek GPS & Kemiringan)"));
     Serial.println(F("  [c] Kalibrasi Gyro & Titik Datar (Level Trim) di Meja/Tanah"));
     Serial.println(F("  [g] Diagnostik Sensor Barometer BMP280 & GPS RushFPV M10"));
     Serial.println(F("  [v] Tes Bunyi Beeper (GP15) & Ganti Mode (Hybrid/Active/Passive)"));
     Serial.println(F("  [t] Lihat Status Servo AutoTrim & Auto-Level Trim"));
     Serial.println(F("  [z] Reset Semua Trim (Servo & Level) ke 0"));
     Serial.println(F("  [m] Ganti Mode Terbang Manual -> Acro -> Angle -> AltHold -> RTH"));
-    Serial.println(F("SIMPAN & SISTEM (Ala iNav / Betaflight - Tanpa Tombol BOOT!):"));
+    Serial.println(F("PENYIMPANAN & KONTROL SISTEM:"));
     Serial.println(F("  [w] SAVE TO FLASH : Simpan semua setting ke EEPROM permanen"));
     Serial.println(F("  [x] REBOOT        : Restart Flight Controller via software"));
     Serial.println(F("  [b] DFU MODE      : Masuk mode Flash DFU TANPA tekan tombol BOOT!"));
+    Serial.println(F("  [e] ESP32 FLASH   : Jembatan USB-to-UART (GP28/GP29) untuk Flash ESP32-C3"));
     Serial.println(F("  [h] Tampilkan menu bantuan & konfigurasi saat ini"));
     Serial.println(F("============================================================\n"));
   }
@@ -236,6 +240,20 @@ public:
           }
           break;
 
+        case 'a':
+        case 'A':
+          if (rc.state.armed) {
+            Serial.println(F("\n[PERINGATAN] Disarm terlebih dahulu sebelum mengubah Pre-Arm Bypass!\n"));
+            break;
+          }
+          rc.prearm_bypass = !rc.prearm_bypass;
+          settings.data.prearm_bypass = rc.prearm_bypass ? 1 : 0;
+          beeper.playSuccess();
+          Serial.print(F("\n[PRE-ARM] Mode diubah LIVE ke: "));
+          Serial.println(rc.prearm_bypass ? F("BYPASS GPS & TILT (Cepat / Tes Meja)") : F("STRICT AKTIF (Wajib GPS 3D & Datar)"));
+          Serial.println(F("          (Ketik 'w' untuk simpan permanen ke Flash)\n"));
+          break;
+
         case 'w':
         case 'W':
           if (rc.state.armed) {
@@ -243,6 +261,8 @@ public:
             break;
           }
           Serial.println(F("\n[FLASH] Menyimpan konfigurasi ke EEPROM Flash..."));
+          settings.data.rc_protocol   = rc.protocol;
+          settings.data.prearm_bypass = rc.prearm_bypass ? 1 : 0;
           settings.save();
           autotrim.pending_flash_save = false;
           beeper.playSuccess();
@@ -265,6 +285,17 @@ public:
             break;
           }
           softwareJumpToDFU();
+          break;
+
+        case 'e':
+        case 'E':
+          if (rc.state.armed) {
+            Serial.println(F("\n[PERINGATAN] Disarm terlebih dahulu sebelum masuk mode ESP32 Flash Bridge!\n"));
+            break;
+          }
+          mixer.begin(); // Pastikan ESC terkunci aman di 1000 us selama proses passthrough
+          beeper.playSuccess();
+          softwareEsp32Passthrough();
           break;
 
         case 'g':
@@ -376,6 +407,8 @@ public:
           Serial.print(imu.state.roll_deg, 1);
           Serial.print(F("° P:"));
           Serial.print(imu.state.pitch_deg, 1);
+          Serial.print(F("° Y:"));
+          Serial.print(imu.state.yaw_deg, 1);
           Serial.print(F("°] | "));
         } else {
           Serial.print(F("[IMU DISCONNECTED] | "));
@@ -391,8 +424,19 @@ public:
         Serial.print(F(" ["));              Serial.print(rc.getModeName());
         Serial.print(F("] | "));
         if (rc.state.failsafe) {
-          Serial.println(F("[NO RC SIGNAL]"));
+          char prearm_buf[48];
+          rc.formatArmBlockReason(prearm_buf, sizeof(prearm_buf));
+          Serial.print(F("[NO RC SIGNAL | Scan:"));
+          Serial.print(rc.getProtocolName());
+          Serial.print(F(" | GP1 Bytes:"));
+          Serial.print(rc.state.rx_bytes[0]);
+          Serial.print(F("] | PREARM["));
+          Serial.print(prearm_buf);
+          Serial.print(F("] | BYPASS:"));
+          Serial.println(rc.state.prearm_bypass ? F("ON") : F("OFF"));
         } else {
+          char prearm_buf[48];
+          rc.formatArmBlockReason(prearm_buf, sizeof(prearm_buf));
           Serial.print(F("SRV[L:"));
           Serial.print(mixer.out.servo_left_us);
           Serial.print(F(" R:"));
@@ -404,7 +448,11 @@ public:
           Serial.print(F("] ESC:"));
           Serial.print(mixer.out.motor_esc_us);
           Serial.print(F(" | "));
-          Serial.println(rc.state.armed ? F("ARMED") : F("DISARMED"));
+          Serial.print(rc.state.armed ? F("ARMED") : F("DISARMED"));
+          Serial.print(F(" | PREARM["));
+          Serial.print(prearm_buf);
+          Serial.print(F("] | BYPASS:"));
+          Serial.println(rc.state.prearm_bypass ? F("ON") : F("OFF"));
         }
         break;
 
@@ -422,6 +470,8 @@ public:
         Serial.print(imu.state.roll_deg, 1);
         Serial.print(F("° P:"));
         Serial.print(imu.state.pitch_deg, 1);
+        Serial.print(F("° Y:"));
+        Serial.print(imu.state.yaw_deg, 1);
         Serial.print(F("°] | RC[R:"));
         Serial.print(rc.state.roll_us);
         Serial.print(F(" P:"));

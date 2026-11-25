@@ -105,6 +105,7 @@ void setup() {
   pid.pitch_pid.kp          = settings.data.pitch_kp;
   pid.angle_kp_roll         = settings.data.angle_kp;
   pid.angle_kp_pitch        = settings.data.angle_kp;
+  rc.prearm_bypass          = (settings.data.prearm_bypass != 0);
 
   // 1. Inisialisasi Output Servo Elevon, Motor ESC (dikunci 1000 us), & Beeper GP15
   mixer.begin();
@@ -153,11 +154,11 @@ void loop() {
     baro.update();
   #endif
 
-  // 2. Baca sinyal Receiver RC di semua UART (UART1, UART6/SBUS, UART3) & teruskan NMEA GPS
-  rc.update(gps);
-
-  // 3. Baca sensor IMU (Gyro + Accel) & hitung sudut Roll/Pitch dengan filter Madgwick
+  // 2. Baca sensor IMU (Gyro + Accel) & hitung sudut Roll/Pitch dengan filter Madgwick
   imu.update(dt);
+
+  // 3. Baca sinyal Receiver RC & evaluasi Pre-Arm Safety Check (menggunakan status GPS & IMU)
+  rc.update(gps, imu.state);
 
   // 4. Hitung kendali PID (Manual / Acro / Angle Auto-Level / Alt-Hold / RTH)
   pid.update(rc.state, imu.state, gps.state, baro.state, dt);

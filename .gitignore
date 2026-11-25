@@ -5,3 +5,11 @@ build/
 *.uf2
 *.bin
 *.hex
+
+# File PCB, Skematik, dan Gerber (dikecualikan dari publikasi sementara)
+Gerber_*/
+Gerber_*.zip
+Schematic_*.pdf
+*.gbr
+*.drl
+*.epro

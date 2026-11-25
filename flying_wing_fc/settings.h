@@ -21,7 +21,7 @@
 #include <EEPROM.h>
 #include "config.h"
 
-#define SETTINGS_MAGIC 0x46574637UL // "FWF7" - Reset EEPROM ke tuned flying wing gains
+#define SETTINGS_MAGIC 0x46574638UL // "FWF8" - Tambah pengaturan Pre-Arm Bypass
 
 struct FCSettings {
   uint32_t magic               = SETTINGS_MAGIC;
@@ -35,6 +35,7 @@ struct FCSettings {
   float    roll_kp             = PID_ROLL_KP;
   float    pitch_kp            = PID_PITCH_KP;
   float    angle_kp            = ANGLE_KP_ROLL;
+  uint8_t  prearm_bypass       = 0;                    // 0 = Cek GPS & Kemiringan Aktif, 1 = Bypass GPS & Kemiringan
 };
 
 #if defined(STM32F4xx) || defined(ARDUINO_ARCH_STM32)
@@ -95,6 +96,8 @@ inline void softwareJumpToDFU() {
   NVIC_SystemReset();
 }
 #elif defined(ARDUINO_ARCH_RP2040) || defined(TARGET_RP2040)
+#include <SerialPIO.h>
+
 inline void softwareReboot() {
   Serial.println(F("\n[REBOOT] Merestart RP2040..."));
   Serial.flush();
@@ -105,12 +108,82 @@ inline void softwareJumpToDFU() {
   Serial.flush();
   rp2040.rebootToBootloader();
 }
+inline void softwareEsp32Passthrough() {
+  Serial.println(F("\n============================================================"));
+  Serial.println(F("[ESP32-BRIDGE] Mode USB-to-UART Passthrough Aktif!"));
+  Serial.println(F("  Jalur Bridge : USB RP2040 <-> GP29 (TX) / GP28 (RX)"));
+  Serial.println(F("  Auto-Reset   : GP26 (BOOT/GPIO9) & GP27 (RST/EN)"));
+  Serial.println(F("  Instruksi    : Tutup Serial Monitor/Configurator lalu jalankan"));
+  Serial.println(F("                 ./flying_wing_fc/flash_esp32_via_pico.sh"));
+  Serial.println(F("                 (Cabut-colok USB atau tekan Reset untuk kembali ke FC)"));
+  Serial.println(F("============================================================"));
+  Serial.flush();
+  delay(80);
+
+  // Inisialisasi SerialPIO dengan FIFO 512 byte pada GP29 (TX) & GP28 (RX)
+  static SerialPIO espSerial(PIN_ESP32_UART_TX, PIN_ESP32_UART_RX, 512);
+  uint32_t current_baud = 115200;
+  espSerial.begin(current_baud);
+
+  // Trigger sekuens masuk Bootloader ESP32-C3 otomatis jika GP26 (BOOT) & GP27 (RST) tersambung
+  pinMode(PIN_ESP32_BOOT, OUTPUT);
+  pinMode(PIN_ESP32_RST, OUTPUT);
+  digitalWrite(PIN_ESP32_BOOT, LOW);  // Tahan GPIO9 = LOW (Download Mode)
+  digitalWrite(PIN_ESP32_RST, LOW);   // Tarik RST = LOW
+  delay(60);
+  digitalWrite(PIN_ESP32_RST, HIGH);  // Lepas RST = HIGH (Boot ke ROM Loader)
+  delay(60);
+  digitalWrite(PIN_ESP32_BOOT, HIGH); // Lepas GPIO9
+
+  uint8_t buf[128];
+  bool prev_dtr = Serial.dtr();
+  bool prev_rts = Serial.rts();
+
+  while (true) {
+    // Ikuti sinyal DTR/RTS dari esptool untuk Auto-Reset & Auto-Bootloader ESP32-C3 (jika GP26/GP27 disambung)
+    bool dtr = Serial.dtr();
+    bool rts = Serial.rts();
+    if (dtr != prev_dtr || rts != prev_rts) {
+      prev_dtr = dtr;
+      prev_rts = rts;
+      // Logika transistor auto-reset standar esptool:
+      // EN  = LOW saat (!dtr && rts)
+      // IO9 = LOW saat (dtr && !rts)
+      digitalWrite(PIN_ESP32_RST,  (!dtr && rts) ? LOW : HIGH);
+      digitalWrite(PIN_ESP32_BOOT, (dtr && !rts) ? LOW : HIGH);
+    }
+
+    // Teruskan byte dari USB Komputer -> ESP32-C3
+    int avail_usb = Serial.available();
+    if (avail_usb > 0) {
+      int n = Serial.readBytes((char *)buf, (avail_usb > (int)sizeof(buf)) ? sizeof(buf) : avail_usb);
+      if (n > 0) {
+        espSerial.write(buf, n);
+      }
+    }
+
+    // Teruskan byte dari ESP32-C3 -> USB Komputer
+    int avail_esp = espSerial.available();
+    if (avail_esp > 0) {
+      int n = 0;
+      while (avail_esp-- > 0 && n < (int)sizeof(buf)) {
+        buf[n++] = (uint8_t)espSerial.read();
+      }
+      if (n > 0) {
+        Serial.write(buf, n);
+      }
+    }
+  }
+}
 #else
 inline void softwareReboot() {
   Serial.println(F("\n[REBOOT] Silakan tekan tombol Reset di board."));
 }
 inline void softwareJumpToDFU() {
   Serial.println(F("\n[DFU] Fitur Auto-DFU khusus untuk STM32F4/RP2040."));
+}
+inline void softwareEsp32Passthrough() {
+  Serial.println(F("\n[ESP32-BRIDGE] Fitur SerialPIO Passthrough khusus untuk RP2040."));
 }
 #endif
 

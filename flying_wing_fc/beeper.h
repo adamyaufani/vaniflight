@@ -137,10 +137,10 @@ public:
     prev_autotrim_active_ = autotrim.is_active;
     prev_autotrim_done_   = autotrim.is_completed;
 
-    // 4. Peringatan jika saklar Arm (SwB) dinyalakan tapi Throttle belum di bawah!
+    // 4. Peringatan jika saklar Arm (SwB) dinyalakan tapi Arming ditolak oleh Pre-Arm Safety Check!
     bool arm_switch_on = !rc.failsafe && (rc.arm_us > 1600);
-    if (arm_switch_on && !rc.armed && (rc.throttle_us >= ARM_SAFETY_MAX_THR_US)) {
-      if (!playing_ && (now - last_warn_ms_ > 600)) {
+    if (arm_switch_on && !rc.armed && (rc.arm_block_flags != ARM_OK)) {
+      if (!playing_ && (now - last_warn_ms_ > 700)) {
         last_warn_ms_ = now;
         static const BeepStep warn_seq[] = { {50, 50}, {50, 50}, {50, 50} };
         startSequence(warn_seq, 3);

@@ -454,13 +454,24 @@ private:
       gx = -in_gy;
       gy = -in_gx;
       gz = -in_gz;
-    #else // ROTATION_DEFAULT (0 derajat)
+    #elif (BOARD_ROTATION == ROTATION_RAW_SENSOR)
       ax = in_ax;
       ay = in_ay;
       az = in_az;
       gx = in_gx;
       gy = in_gy;
       gz = in_gz;
+    #else // ROTATION_DEFAULT: Moncong = Tanpa LED (VCC), Ekor = LED (INT), Kiri = Solder Pad, Kanan = Tanpa Pad
+      // Saat Solder Pad (Kiri) naik  -> in_ax < 0, in_gy > 0 -> ay > 0, gx > 0 -> +Roll (Sayap Kiri naik)
+      // Saat LED (Ekor) turun        -> in_ay > 0, in_gx > 0 -> ax < 0, gy > 0 -> +Pitch (Ekor turun, Moncong naik)
+      // Saat LED (Ekor) naik         -> in_ay < 0, in_gx < 0 -> ax > 0, gy < 0 -> -Pitch (Ekor naik, Moncong turun)
+      // Saat Moncong belok Kanan     -> in_gz < 0            -> gz > 0         -> +Yaw (Belok Kanan)
+      ax = -in_ay;
+      ay = -in_ax;
+      az =  in_az;
+      gx =  in_gy;
+      gy =  in_gx;
+      gz = -in_gz;
     #endif
 
     return true;
